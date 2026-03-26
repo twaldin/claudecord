@@ -1,0 +1,35 @@
+#!/bin/bash
+# kill_teammate — Stop a teammate agent
+# Usage: kill_teammate <name>
+
+set -e
+
+NAME="$1"
+SESSION="claudecord"
+REGISTRY="$HOME/claudecord/registry.tsv"
+
+if [ -z "$NAME" ]; then
+  echo "Usage: kill_teammate <name>"
+  exit 1
+fi
+
+if [ "$NAME" = "lifeos" ]; then
+  echo "ERROR: Cannot kill LifeOS (the manager). Use 'tmux kill-session -t claudecord' to shut everything down."
+  exit 1
+fi
+
+ENTRY=$(grep "^$NAME|.*|alive" "$REGISTRY" 2>/dev/null | tail -1)
+if [ -z "$ENTRY" ]; then
+  echo "ERROR: teammate '$NAME' not found or not alive"
+  exit 1
+fi
+
+PANE_INDEX=$(echo "$ENTRY" | cut -d'|' -f2)
+
+# Kill the pane
+tmux kill-pane -t "$SESSION:0.$PANE_INDEX" 2>/dev/null || true
+
+# Mark dead in registry
+sed -i '' "s/^$NAME|$PANE_INDEX|alive/$NAME|$PANE_INDEX|dead/" "$REGISTRY"
+
+echo "Killed $NAME (was pane $PANE_INDEX)"

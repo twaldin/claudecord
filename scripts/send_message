@@ -1,0 +1,45 @@
+#!/bin/bash
+# send_message — Inject a message into a teammate's Claude Code session
+# Usage: send_message <teammate_name> <message>
+# Example: send_message trader "check Polymarket for Iran ceasefire odds"
+#
+# Uses tmux send-keys for instant delivery — no MCP overhead, no inbox.
+# Message arrives as if typed in the terminal.
+
+set -e
+
+NAME="$1"
+shift
+MESSAGE="$*"
+SESSION="claudecord"
+REGISTRY="$HOME/claudecord/registry.tsv"
+
+if [ -z "$NAME" ] || [ -z "$MESSAGE" ]; then
+  echo "Usage: send_message <teammate_name> <message>"
+  exit 1
+fi
+
+# Look up pane from registry
+ENTRY=$(grep "^$NAME|.*|alive" "$REGISTRY" 2>/dev/null | tail -1)
+if [ -z "$ENTRY" ]; then
+  echo "ERROR: teammate '$NAME' not found or not alive"
+  exit 1
+fi
+
+PANE_INDEX=$(echo "$ENTRY" | cut -d'|' -f2)
+
+# Verify pane still exists
+if ! tmux list-panes -t "$SESSION" -F '#{pane_index}' 2>/dev/null | grep -q "^$PANE_INDEX$"; then
+  echo "ERROR: pane $PANE_INDEX for '$NAME' is dead"
+  # Mark dead in registry
+  sed -i '' "s/^$NAME|$PANE_INDEX|alive/$NAME|$PANE_INDEX|dead/" "$REGISTRY"
+  exit 1
+fi
+
+# Send message via tmux send-keys with envelope to prevent prompt injection
+# -l flag sends literal text (no key binding interpretation)
+ENVELOPE="[Teammate:$(hostname -s)] $MESSAGE"
+tmux send-keys -t "$SESSION:0.$PANE_INDEX" -l "$ENVELOPE"
+tmux send-keys -t "$SESSION:0.$PANE_INDEX" Enter
+
+echo "Sent to $NAME (pane $PANE_INDEX)"

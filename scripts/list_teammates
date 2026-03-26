@@ -1,0 +1,35 @@
+#!/bin/bash
+# list_teammates — Show status of all registered agents
+# Usage: list_teammates
+
+SESSION="claudecord"
+REGISTRY="$HOME/claudecord/registry.tsv"
+
+if [ ! -f "$REGISTRY" ]; then
+  echo "No registry found at $REGISTRY"
+  exit 1
+fi
+
+echo "=== Claudecord Agent Team ==="
+echo ""
+printf "%-15s %-6s %-8s %-40s %s\n" "NAME" "PANE" "STATUS" "DIRECTORY" "SPAWNED"
+printf "%-15s %-6s %-8s %-40s %s\n" "----" "----" "------" "---------" "-------"
+
+while IFS='|' read -r name pane status dir spawned; do
+  # Skip header
+  [[ "$name" == \#* ]] && continue
+  [ -z "$name" ] && continue
+
+  # Check if pane is actually alive
+  ACTUAL_STATUS="$status"
+  if [ "$status" = "alive" ]; then
+    if ! tmux list-panes -t "$SESSION" -F '#{pane_index}' 2>/dev/null | grep -q "^$pane$"; then
+      ACTUAL_STATUS="DEAD"
+    fi
+  fi
+
+  printf "%-15s %-6s %-8s %-40s %s\n" "$name" "$pane" "$ACTUAL_STATUS" "$dir" "$spawned"
+done < "$REGISTRY"
+
+echo ""
+echo "Total panes: $(tmux list-panes -t "$SESSION" 2>/dev/null | wc -l | tr -d ' ')"

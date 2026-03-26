@@ -1,0 +1,56 @@
+#!/bin/bash
+# spawn_teammate — Spawn a new Claude Code agent in a tmux pane
+# Usage: spawn_teammate <name> <directory> [channel_flag]
+# Example: spawn_teammate trader ~/claudecord/agents/trader/
+#
+# The agent gets its own Claude Code session with:
+# - Its own CLAUDE.md (from the directory)
+# - Its own .mcp.json (project-level MCP servers)
+# - The claudecord-router as its channel provider
+# - Full autonomous permissions
+
+set -e
+
+NAME="$1"
+DIR="$2"
+SESSION="claudecord"
+REGISTRY="$HOME/claudecord/registry.tsv"
+
+if [ -z "$NAME" ] || [ -z "$DIR" ]; then
+  echo "Usage: spawn_teammate <name> <directory>"
+  exit 1
+fi
+
+# Ensure directory exists
+if [ ! -d "$DIR" ]; then
+  echo "ERROR: directory $DIR does not exist"
+  exit 1
+fi
+
+# Ensure tmux session exists
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+  echo "ERROR: tmux session '$SESSION' does not exist. Run start.sh first."
+  exit 1
+fi
+
+# Check if already running
+if grep -q "^$NAME|.*|alive" "$REGISTRY" 2>/dev/null; then
+  EXISTING_PANE=$(grep "^$NAME|.*|alive" "$REGISTRY" | tail -1 | cut -d'|' -f2)
+  if tmux list-panes -t "$SESSION" -F '#{pane_index}' 2>/dev/null | grep -q "^$EXISTING_PANE$"; then
+    echo "WARNING: $NAME already alive in pane $EXISTING_PANE"
+    exit 0
+  fi
+fi
+
+# Create new pane and capture its index
+PANE_INDEX=$(tmux split-window -t "$SESSION" -h -P -F '#{pane_index}' \
+  -c "$DIR" \
+  "claude --dangerously-load-development-channels server:claudecord --permission-mode dontAsk 2>&1; echo '[AGENT $NAME EXITED]'; read")
+
+# Title the pane for identification
+tmux select-pane -t "$SESSION:0.$PANE_INDEX" -T "$NAME"
+
+# Register
+echo "$NAME|$PANE_INDEX|alive|$DIR|$(date -Iseconds)" >> "$REGISTRY"
+
+echo "Spawned $NAME in pane $PANE_INDEX at $DIR"
