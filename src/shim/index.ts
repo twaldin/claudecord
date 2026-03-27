@@ -5,7 +5,7 @@ import { formatChannelMessage } from './tools.js'
 import type { ChannelMessage, AgentReply } from '../shared/types.js'
 
 const AGENT_NAME = process.env['CLAUDECORD_AGENT_NAME'] ?? 'default'
-const DAEMON_URL = process.env['CLAUDECORD_DAEMON_URL'] ?? 'http://localhost:7400'
+const DAEMON_URL = process.env['CLAUDECORD_DAEMON_URL'] ?? 'http://localhost:19532'
 const POLL_INTERVAL_MS = 2000
 
 async function daemonFetch(path: string, init?: RequestInit): Promise<Response | null> {
@@ -117,25 +117,25 @@ async function main() {
     for (const msg of messages) {
       const formatted = formatChannelMessage(msg)
 
-      const attachmentInfo = msg.attachments && msg.attachments.length > 0
-        ? ` attachment_count="${msg.attachments.length}" attachments="${msg.attachments.map(a => `${a.name}(${a.contentType},${a.size})`).join(',')}"`
-        : ''
+      const meta: Record<string, string> = {
+        chat_id: formatted.meta.chat_id,
+        message_id: formatted.meta.message_id,
+        user: formatted.meta.user,
+        user_id: formatted.meta.user_id,
+        ts: formatted.meta.ts,
+      }
 
-      const channelXml =
-        `<channel source="${formatted.meta.source}" ` +
-        `chat_id="${formatted.meta.chat_id}" ` +
-        `message_id="${formatted.meta.message_id}" ` +
-        `user="${formatted.meta.user}" ` +
-        `user_id="${formatted.meta.user_id}" ` +
-        `ts="${formatted.meta.ts}"` +
-        `${attachmentInfo}>` +
-        `${formatted.content}</channel>`
+      if (msg.attachments && msg.attachments.length > 0) {
+        meta['attachment_count'] = String(msg.attachments.length)
+        meta['attachments'] = msg.attachments.map(a => `${a.name}(${a.contentType},${a.size})`).join(',')
+      }
 
       try {
         await server.server.notification({
           method: 'notifications/claude/channel',
           params: {
-            channel: channelXml,
+            content: formatted.content,
+            meta,
           },
         })
       } catch (err) {

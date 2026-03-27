@@ -1,5 +1,5 @@
 ---
-updated: 2026-03-26
+updated: 2026-03-27
 mode: paper
 starting_capital: 500.00
 ---
@@ -12,10 +12,10 @@ starting_capital: 500.00
 | Metric | Value |
 |--------|-------|
 | Starting Capital | $500.00 |
-| Current Value | $499.00 |
+| Current Value | $506.75 |
 | Cash | $254.25 |
-| Deployed | $244.75 |
-| Total P&L | -$1.00 (-0.2%) |
+| Deployed | $252.50 |
+| Total P&L | +$6.75 (+1.35%) |
 | Open Positions | 5 |
 | Closed Trades | 0 |
 | Win Rate | - |
@@ -23,10 +23,10 @@ starting_capital: 500.00
 ## Open Positions
 | Platform | Market | Direction | Shares | Entry Price | Cost | Current | Unrealized P&L |
 |----------|--------|-----------|--------|-------------|------|---------|-----------------|
-| Polymarket | Hormuz traffic normal by Apr 30 | NO | 75 | $0.66 | $49.50 | $0.66 | $0.00 |
-| Polymarket | Iran regime fall by Jun 30 | NO | 75 | $0.77 | $57.75 | $0.77 | $0.00 |
-| Polymarket | Trump end mil ops Iran by Jun 30 | NO | 100 | $0.23 | $23.00 | $0.22 | -$1.00 |
-| Polymarket | US x Iran ceasefire by Dec 31 | NO | 300 | $0.22 | $66.00 | $0.22 | $0.00 |
+| Polymarket | Hormuz traffic normal by Apr 30 | NO | 75 | $0.66 | $49.50 | $0.70 | +$3.00 |
+| Polymarket | Iran regime fall by Jun 30 | NO | 75 | $0.77 | $57.75 | $0.78 | +$0.75 |
+| Polymarket | Trump end mil ops Iran by Jun 30 | NO | 100 | $0.23 | $23.00 | $0.23 | $0.00 |
+| Polymarket | US x Iran ceasefire by Dec 31 | NO | 300 | $0.22 | $66.00 | $0.23 | +$3.00 |
 | Kalshi | Hormuz normal by Jun 1 | NO | 150 | $0.33 | $49.50 | $0.33 | $0.00 |
 
 ## Trade History

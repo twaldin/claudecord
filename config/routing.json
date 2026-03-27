@@ -9,9 +9,11 @@
       ]
     },
     "trader": {
-      "channels": []
+      "channels": [
+        "1486573684918583306"
+      ]
     },
-    "coder": {
+    "evaluator": {
       "channels": [
         "1485084317272244274"
       ]

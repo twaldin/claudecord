@@ -24,12 +24,14 @@ if [ -z "$ENTRY" ]; then
   exit 1
 fi
 
-PANE_INDEX=$(echo "$ENTRY" | cut -d'|' -f2)
+# Registry format: name|window|pane|status|dir|spawned
+WINDOW=$(echo "$ENTRY" | cut -d'|' -f2)
+PANE_INDEX=$(echo "$ENTRY" | cut -d'|' -f3)
 
 # Kill the pane
-tmux kill-pane -t "$SESSION:0.$PANE_INDEX" 2>/dev/null || true
+tmux kill-pane -t "$SESSION:$WINDOW.$PANE_INDEX" 2>/dev/null || true
 
 # Mark dead in registry
-sed -i '' "s/^$NAME|$PANE_INDEX|alive/$NAME|$PANE_INDEX|dead/" "$REGISTRY"
+sed -i '' "s/^$NAME|$WINDOW|$PANE_INDEX|alive/$NAME|$WINDOW|$PANE_INDEX|dead/" "$REGISTRY"
 
-echo "Killed $NAME (was pane $PANE_INDEX)"
+echo "Killed $NAME (was pane $WINDOW.$PANE_INDEX)"

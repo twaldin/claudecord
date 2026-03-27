@@ -1,0 +1,21 @@
+# name|window|pane|status|directory|spawned_at
+trader|1|1|dead|/Users/twaldin/claudecord/agents/trader/|2026-03-26T13:45:00-04:00
+stock-monitor|1|2|dead|/Users/twaldin/claudecord/agents/stock-monitor/|2026-03-26T14:09:09-04:00
+evaluator|2|4|dead|/Users/twaldin/claudecord/agents/evaluator|2026-03-26T19:30:13-04:00
+monitor|2|1|dead|/Users/twaldin/claudecord/agents/monitor|2026-03-27T01:18:00-04:00
+coder-fix-20|2|2|dead|/Users/twaldin/trade-up-bot|2026-03-27T01:18:00-04:00
+coder-fix-21|2|3|dead|/Users/twaldin/trade-up-bot|2026-03-27T01:18:00-04:00
+trader|2|3|dead|/Users/twaldin/claudecord/agents/trader|2026-03-27T01:25:40-04:00
+stock-monitor|2|4|dead|/Users/twaldin/claudecord/agents/stock-monitor|2026-03-27T01:25:43-04:00
+evaluator|2|5|dead|/Users/twaldin/claudecord/agents/evaluator|2026-03-27T01:25:49-04:00
+monitor|2|6|dead|/Users/twaldin/claudecord/agents/monitor|2026-03-27T01:25:53-04:00
+coder-fix-20|2|4|dead|/Users/twaldin/trade-up-bot|2026-03-27T01:25:59-04:00
+coder-fix-21|2|3|dead|/Users/twaldin/trade-up-bot|2026-03-27T01:26:02-04:00
+trader|1|2|alive|/Users/twaldin/claudecord/agents/trader|2026-03-27T01:26:54-04:00
+stock-monitor|1|3|alive|/Users/twaldin/claudecord/agents/stock-monitor|2026-03-27T01:26:57-04:00
+monitor|2|2|alive|/Users/twaldin/claudecord/agents/monitor|2026-03-27T01:27:00-04:00
+evaluator|2|3|alive|/Users/twaldin/claudecord/agents/evaluator|2026-03-27T01:27:03-04:00
+coder-fix-20|2|4|alive|/Users/twaldin/trade-up-bot|2026-03-27T01:27:06-04:00
+coder-fix-21|2|5|dead|/Users/twaldin/trade-up-bot|2026-03-27T01:27:09-04:00
+coder-fix-21|2|5|alive|/Users/twaldin/trade-up-bot|2026-03-27T01:27:37-04:00
+stock-monitor|1|3|alive|/Users/twaldin/claudecord/agents/stock-monitor|2026-03-27T01:27:57-04:00

@@ -1,5 +1,5 @@
 ---
-updated: 2026-03-26
+updated: 2026-03-28T08:43
 ---
 
 # Active Markets Watchlist
@@ -8,12 +8,12 @@ updated: 2026-03-26
 
 ### 1. Strait of Hormuz traffic returns to normal by end of April (Polymarket)
 - **Direction:** NO
-- **Market Price:** YES 34% / NO 66%
-- **My Estimate:** YES ~15% / NO ~85%
-- **Edge:** ~19% on NO
-- **Thesis:** War ongoing, Iran rejected ceasefire, Hormuz sovereignty is a key Iranian bargaining chip. No chance traffic normalizes in 5 weeks while active conflict continues and Iran demands international recognition of Hormuz authority.
-- **Volume:** $1.25M | **Ends:** Apr 30, 2026
-- **Source:** polymarket.com/predictions/macro-geopolitics
+- **Market Price:** YES 30% / NO 70% (updated 3/28 08:43) — NO +4¢ from entry
+- **My Estimate:** YES ~8% / NO ~92%
+- **Edge:** ~22% on NO
+- **Thesis:** Day 28. Iran parliament planning to formalize Hormuz passage fees — digging in, not preparing to open. Iran allowing "friendly nations" (India, China, Russia) through but blocking adversaries. This is a partial, selective opening — NOT normalization. Energy pause through Apr 6 but all other ops continue. ~2,000 vessels stranded, ~5/day. Even ceasefire tomorrow wouldn't normalize by Apr 30.
+- **Volume:** $1.3M | **Ends:** Apr 30, 2026
+- **Source:** polymarket.com/event/strait-of-hormuz-traffic-returns-to-normal-by-april-30
 
 ### 1b. Strait of Hormuz traffic returns to normal by Jun 1 (Kalshi)
 - **Direction:** NO
@@ -26,56 +26,63 @@ updated: 2026-03-26
 
 ### 2. Will the Iranian regime fall by June 30?
 - **Direction:** NO
-- **Market Price:** YES 23% / NO 77%
+- **Market Price:** YES 22% / NO 78% (updated 3/27 EOD) — NO +1¢ from entry
 - **My Estimate:** YES ~10% / NO ~90%
-- **Edge:** ~13% on NO
-- **Thesis:** US intelligence says regime consolidating, not collapsing. Mojtaba Khamenei elected as new Supreme Leader on Mar 8. IRGC has gained power, not lost it. Air campaign alone won't topple regime (Netanyahu himself said "can't do revolutions from the air"). Kurdish opposition arming is early-stage and unlikely to produce regime change in 3 months.
+- **Edge:** ~12% on NO
+- **Thesis:** Regime consolidating under Mojtaba Khamenei. IRGC strengthened. Air campaign alone won't topple regime. Kurdish opposition arming is early-stage. Market drifting in our direction as reality of regime resilience sets in.
 - **Volume:** $21M | **Ends:** Jun 30, 2026
 - **Source:** polymarket.com/predictions/middle-east
 
 ### 3. Trump announces end of military operations against Iran by Jun 30
 - **Direction:** NO
-- **Market Price:** YES 77% / NO 23%
-- **My Estimate:** YES ~58% / NO ~42%
-- **Edge:** ~19% on NO
-- **Thesis:** Iran just rejected 15-point plan as "maximalist." Positions are far apart — Iran demands war reparations, Hormuz sovereignty, end of attacks on Hezbollah. No direct talks happening. War is only 25 days old. While Trump could unilaterally declare "mission accomplished," Iran's rejection today signals months of mediation ahead, not weeks. Pakistan talks possible Friday but enormous gaps remain.
-- **Volume:** $6M | **Ends:** Jun 30, 2026
-- **Source:** polymarket.com/predictions/middle-east
+- **Market Price:** YES 77% / NO 23% (updated 3/28 08:43)
+- **My Estimate:** YES ~55% / NO ~45%
+- **Edge:** ~22% on NO
+- **Thesis:** Near-term buckets still drifting down (Apr 30 now 55%, was 57%). Energy pause through Apr 6 but all other strikes continue. Iran formalizing Hormuz fees. 82nd Airborne deployed. CNN confirmed a trader made ~$1M on "remarkably accurate" Iran bets — insider trading risk remains elevated.
+- **Risk flag:** Insider trading suspected — 8 new accounts bet $70K on ceasefire by Mar 31 when it was at 6%, days before Trump's "productive talks" post. Monitor for similar patterns.
+- **Volume:** $6.5M | **Ends:** Jun 30, 2026
+- **Source:** polymarket.com/event/trump-announces-end-of-military-operations-against-iran-by
 
 ### 4. US x Iran ceasefire by Dec 31
 - **Direction:** NO
-- **Market Price:** YES 78% / NO 22%
-- **My Estimate:** YES ~65% / NO ~35%
-- **Edge:** ~13% on NO
-- **Thesis:** Iran rejected 15-point plan on 3/25 and issued maximalist counterproposal (reparations, Hormuz sovereignty, halt on officials' killings). FM Araghchi says no negotiations happening. 9 months is long, but the preconditions Iran demands are non-starters for the US. Even with Trump's incentive to end the war (oil prices, inflation), the diplomatic gap is enormous.
+- **Market Price:** YES 78% / NO 23% (updated 3/27 EOD) — NO +1¢ from entry
+- **My Estimate:** YES ~63% / NO ~37%
+- **Edge:** ~14% on NO
+- **Thesis:** Iran formalizing Hormuz passage fees (parliamentary legislation), signaling long-term control intent. Denies direct talks. 5 conditions still non-starters. Pause pattern (5d → 10d) shows diplomatic window but Iran not walking through it. 9 months is long but the preconditions gap is structural, not tactical.
 - **Volume:** $49M | **Ends:** Dec 31, 2026
 - **Source:** polymarket.com/event/us-x-iran-ceasefire-by
 
 ## Tracking (No Position Yet)
 
 ### Netanyahu out by Dec 31
-- **Market:** YES 50% / NO 50%
+- **Market:** YES 51% / NO 49% (updated 3/26 evening)
 - **My Estimate:** ~50% — no edge
-- **Notes:** Budget deadline end of March, possible early elections Jun/Jul. Iran war helps him politically. Too close to call.
+- **Notes:** Iran war boosts Netanyahu politically. $73M volume — huge market. Too close to call.
+
+### Iran x Israel/US conflict ends by Dec 31
+- **Market:** YES 85% / NO 15% (updated 3/26 evening)
+- **My Estimate:** YES ~70% / NO ~30%
+- **Edge:** ~15% on NO — above threshold
+- **Notes:** $7M volume. Highly correlated with existing ceasefire NO position. Adding would over-concentrate Iran exposure. **Monitoring only** — will enter if NO price drops below 12¢ for better risk/reward.
 
 ### Hungary election — TISZA vs Fidesz (Apr 12)
-- **Market:** TISZA 64% / Fidesz 36%
-- **My Estimate:** TISZA ~65% — no edge
-- **Notes:** Median poll (best track record) now shows TISZA 58% vs Fidesz 35% among decided voters, 23-point lead widening from 20 in Feb. But PolitPro vote share trend is tighter: TISZA 45.6% vs Fidesz 41.6%. Hungary's constituency system heavily favors Fidesz (won 2/3 supermajority with 54% of votes in 2022). Market at 64% TISZA seems fairly priced given structural advantage. No edge.
+- **Market:** TISZA 72% / Fidesz 27% popular vote (updated 3/26)
+- **My Estimate:** TISZA ~67% — slight edge on Fidesz but below threshold
+- **Notes:** Polls split: TISZA +4 on average but Nézőpont shows Fidesz +6. Margin of victory market: TISZA 9%+ at 35%, TISZA 6-9% at 16%, TISZA 3-6% at 18%. Thin liquidity (~$119K). No position.
 
 ### Russia x Ukraine ceasefire by end of 2026
-- **Market:** YES 34% / NO 66%
+- **Market:** YES 35% / NO 65%
 - **My Estimate:** YES ~28%
-- **Edge:** ~6% on NO — not enough
-- **Notes:** Peace talks on hold due to Iran war. US attention diverted. Monitoring.
+- **Edge:** ~7% on NO — below threshold
+- **Notes:** Peace talks on hold due to Iran war. Monitoring for shift.
 
 ### Xi Jinping out before 2027
 - **Market:** YES 8.7%
-- **Notes:** Low volume, thin market. No strong view.
+- **Notes:** Correctly priced. No edge.
 
 ### China invade Taiwan by end of 2026
 - **Market:** YES 11%
-- **Notes:** Correctly priced low. No edge.
+- **Notes:** Correctly priced. No edge.
 
 ## Cross-Market Arbitrage Notes (Polymarket vs Kalshi)
 

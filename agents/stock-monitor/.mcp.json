@@ -5,7 +5,7 @@
       "command": "npx",
       "args": ["tsx", "/Users/twaldin/claudecord/src/shim/index.ts"],
       "env": {
-        "CLAUDECORD_AGENT_NAME": "lifeos",
+        "CLAUDECORD_AGENT_NAME": "stock-monitor",
         "CLAUDECORD_ROUTER_PORT": "19532"
       }
     }
