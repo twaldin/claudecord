@@ -139,6 +139,14 @@ function makeDeps(dir: string) {
 }
 
 describe('createAgentChannel', () => {
+  it('throws for persistent agents', async () => {
+    const { deps } = makeDeps(tmpDir)
+    const manager = createChannelManager(deps)
+    await expect(manager.createAgentChannel('trader', 'persistent', 'trade')).rejects.toThrow(
+      /persistent/
+    )
+  })
+
   it('calls guild.channels.create with agent name', async () => {
     const { deps, mockGuild } = makeDeps(tmpDir)
     const manager = createChannelManager(deps)
