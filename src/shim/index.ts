@@ -6,11 +6,18 @@ import type { ChannelMessage, AgentReply } from '../shared/types.js'
 
 const AGENT_NAME = process.env['CLAUDECORD_AGENT_NAME'] ?? 'default'
 const DAEMON_URL = process.env['CLAUDECORD_DAEMON_URL'] ?? 'http://localhost:19532'
+const API_SECRET = process.env['CLAUDECORD_API_SECRET']
 const POLL_INTERVAL_MS = 2000
 
 async function daemonFetch(path: string, init?: RequestInit): Promise<Response | null> {
+  const headers: Record<string, string> = {
+    ...(init?.headers as Record<string, string> | undefined),
+  }
+  if (API_SECRET) {
+    headers['Authorization'] = `Bearer ${API_SECRET}`
+  }
   try {
-    return await fetch(`${DAEMON_URL}${path}`, init)
+    return await fetch(`${DAEMON_URL}${path}`, { ...init, headers })
   } catch {
     // Daemon unreachable — silent retry next poll
     return null

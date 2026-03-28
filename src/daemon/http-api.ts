@@ -9,6 +9,19 @@ export function createHttpApi(deps: HttpApiDeps) {
   const app = express()
   app.use(express.json())
 
+  const apiSecret = process.env['CLAUDECORD_API_SECRET']
+  if (apiSecret) {
+    app.use((req, res, next) => {
+      if (req.path === '/health') return next()
+      const auth = req.headers['authorization']
+      if (auth !== `Bearer ${apiSecret}`) {
+        res.status(401).json({ error: 'Unauthorized' })
+        return
+      }
+      next()
+    })
+  }
+
   const registeredAgents = new Set<string>()
   const messageQueues = new Map<string, ChannelMessage[]>()
 
