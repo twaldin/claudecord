@@ -88,7 +88,7 @@ fi
 # Create new pane with CLAUDECORD_AGENT_NAME exported so all scripts inherit it
 PANE_INDEX=$(tmux split-window -t "$SESSION:$WINDOW" -h -P -F '#{pane_index}' \
   -c "$DIR" \
-  "export CLAUDECORD_AGENT_NAME='$NAME'; export PATH=\"$CLAUDECORD_HOME/scripts:\$PATH\"; $CLAUDE_CMD 2>&1; echo '[AGENT $NAME EXITED]'; read")
+  "export CLAUDECORD_AGENT_NAME='$NAME'; export PATH=\"$CLAUDECORD_HOME/scripts/agents:$CLAUDECORD_HOME/scripts/tools:\$PATH\"; $CLAUDE_CMD 2>&1; echo '[AGENT $NAME EXITED]'; read")
 
 # Title the pane for identification
 tmux select-pane -t "$SESSION:$WINDOW.$PANE_INDEX" -T "$NAME"

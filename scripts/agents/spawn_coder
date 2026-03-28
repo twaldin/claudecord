@@ -64,7 +64,7 @@ cp "$CLAUDECORD_HOME/agents/coder/template.md" "$WT_DIR/AGENT.md" 2>/dev/null ||
 
 # Spawn the agent
 AGENT_NAME="coder-fix-${ISSUE}"
-"$CLAUDECORD_HOME/scripts/spawn_teammate" "$AGENT_NAME" "$WT_DIR" --model "$MODEL"
+"$CLAUDECORD_HOME/scripts/agents/spawn_teammate" "$AGENT_NAME" "$WT_DIR" --model "$MODEL"
 
 # Build reviewer instruction
 REVIEWER_INSTRUCTION=""
@@ -74,7 +74,7 @@ fi
 
 # Send task with issue context
 sleep 5
-"$CLAUDECORD_HOME/scripts/send_message" "$AGENT_NAME" \
+"$CLAUDECORD_HOME/scripts/agents/send_message" "$AGENT_NAME" \
   "Fix GitHub issue #${ISSUE}: ${ISSUE_TITLE}
 
 Issue description:
