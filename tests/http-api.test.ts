@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createHttpApi } from '../src/daemon/http-api.js'
 import type { Server } from 'http'
-import type { AgentReply, ChannelMessage, AgentSpawnBody, WorkCompletedBody, AgentHeartbeatBody } from '../src/shared/types.js'
+import type { AgentReply, ChannelMessage, AgentSpawnBody, WorkCompletedBody, AgentHeartbeatBody, AgentType } from '../src/shared/types.js'
 
 let server: Server
 let port: number
@@ -345,5 +345,96 @@ describe('API secret auth middleware', () => {
       headers: { 'Authorization': 'Bearer wrong-token' },
     })
     expect(res.status).toBe(401)
+  })
+})
+
+describe('onSpawnNotify callback', () => {
+  let notifyServer: Server
+  let notifyPort: number
+  const notifyEvents: Array<{ agentName: string; agentType: AgentType; task?: string; channelId?: string }> = []
+
+  function notifyUrl(path: string) {
+    return `http://localhost:${notifyPort}${path}`
+  }
+
+  beforeAll(async () => {
+    const api = createHttpApi({
+      onReply: async () => {},
+      onAgentSpawn: async (data) => ({ channelId: `ch-${data.agentName}` }),
+      onSpawnNotify: async (data) => { notifyEvents.push(data) },
+    })
+    await new Promise<void>((resolve) => {
+      notifyServer = api.app.listen(0, () => {
+        const addr = notifyServer.address()
+        if (addr && typeof addr === 'object') notifyPort = (addr as { port: number }).port
+        resolve()
+      })
+    })
+  })
+
+  afterAll(() => { notifyServer.close() })
+
+  it('calls onSpawnNotify with agentName, agentType, task, and channelId after successful spawn', async () => {
+    const res = await fetch(notifyUrl('/agent/spawn'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentName: 'coder-fix-99', agentType: 'coder', task: 'Fix null pointer', issueNumber: 99 }),
+    })
+    expect(res.status).toBe(200)
+    expect(notifyEvents).toHaveLength(1)
+    expect(notifyEvents[0]?.agentName).toBe('coder-fix-99')
+    expect(notifyEvents[0]?.agentType).toBe('coder')
+    expect(notifyEvents[0]?.task).toBe('Fix null pointer')
+    expect(notifyEvents[0]?.channelId).toBe('ch-coder-fix-99')
+  })
+
+  it('onSpawnNotify is optional — spawn succeeds when callback is absent', async () => {
+    const api = createHttpApi({
+      onReply: async () => {},
+      onAgentSpawn: async (data) => ({ channelId: `ch-${data.agentName}` }),
+    })
+    let noNotifyServer!: Server
+    let noNotifyPort: number
+    await new Promise<void>((resolve) => {
+      noNotifyServer = api.app.listen(0, () => {
+        const addr = noNotifyServer.address()
+        if (addr && typeof addr === 'object') noNotifyPort = (addr as { port: number }).port
+        resolve()
+      })
+    })
+    const res = await fetch(`http://localhost:${noNotifyPort}/agent/spawn`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentName: 'coder-fix-100', agentType: 'coder', task: 'Add tests' }),
+    })
+    noNotifyServer.close()
+    expect(res.status).toBe(200)
+    const data = await res.json() as { ok: boolean; channelId: string }
+    expect(data.ok).toBe(true)
+    expect(data.channelId).toBe('ch-coder-fix-100')
+  })
+
+  it('does not call onSpawnNotify when onAgentSpawn is absent', async () => {
+    const noHandlerEvents: unknown[] = []
+    const api = createHttpApi({
+      onReply: async () => {},
+      onSpawnNotify: async (data) => { noHandlerEvents.push(data) },
+    })
+    let noHandlerServer!: Server
+    let noHandlerPort: number
+    await new Promise<void>((resolve) => {
+      noHandlerServer = api.app.listen(0, () => {
+        const addr = noHandlerServer.address()
+        if (addr && typeof addr === 'object') noHandlerPort = (addr as { port: number }).port
+        resolve()
+      })
+    })
+    await fetch(`http://localhost:${noHandlerPort}/agent/spawn`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentName: 'coder-fix-101', agentType: 'coder', task: 'Refactor' }),
+    })
+    noHandlerServer.close()
+    expect(noHandlerEvents).toHaveLength(0)
   })
 })
