@@ -254,7 +254,7 @@ Fields:
 Footer:    "Watch progress in #coder-fix-49"
 ```
 
-This is the "dispatch notification" — Tim sees it the moment work starts.
+This is the "dispatch notification" — the user sees it the moment work starts.
 
 ---
 
@@ -699,7 +699,7 @@ Documents the channel-state.json format for setup.
 ### Spawn Flow (End-to-End)
 
 ```
-orchestrator calls spawn_teammate coder-fix-49 /tmp/wt --project ~/trade-up-bot
+orchestrator calls spawn_teammate coder-fix-49 /tmp/wt --project ~/my-project
   │
   ├── tmux pane created, registry.tsv appended
   │

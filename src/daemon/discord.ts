@@ -169,11 +169,20 @@ export function createDiscordClient(deps: DiscordClientDeps) {
     return msg.id
   }
 
+  async function editBuiltEmbed(channelId: string, messageId: string, embed: EmbedBuilder): Promise<void> {
+    const channel = await client.channels.fetch(channelId)
+    if (!channel?.isTextBased() || !('send' in channel)) {
+      throw new Error(`Channel ${channelId} is not a text channel`)
+    }
+    const message = await channel.messages.fetch(messageId)
+    await message.edit({ embeds: [embed] })
+  }
+
   async function destroy() {
     await client.destroy()
   }
 
-  return { login, sendToChannel, editMessage, sendEmbed, sendBuiltEmbed, addReactions, destroy, client }
+  return { login, sendToChannel, editMessage, sendEmbed, sendBuiltEmbed, editBuiltEmbed, addReactions, destroy, client }
 }
 
 export function splitMessage(text: string): string[] {
