@@ -17,8 +17,14 @@ export function createDiscordClient(deps: DiscordClientDeps) {
     ],
   })
 
+  const allowedUsers = process.env['DISCORD_ALLOWED_USERS']
+    ?.split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
+
   client.on('messageCreate', (message: Message) => {
     if (message.author.bot) return
+    if (allowedUsers && allowedUsers.length > 0 && !allowedUsers.includes(message.author.id)) return
 
     const channelMessage: ChannelMessage = {
       content: message.content,
