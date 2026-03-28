@@ -42,14 +42,14 @@ export function saveChannelState(state: ChannelLifecycle[], path: string): void 
 
 interface DiscordChannelLike {
   permissionOverwrites: {
-    create: (target: string, perms: Record<string, boolean>) => Promise<void>
+    create: (target: string, perms: Record<string, boolean>) => Promise<unknown>
   }
 }
 
 interface DiscordGuildLike {
   channels: {
     create: (opts: { name: string; type: number; parent?: string; topic?: string }) => Promise<{ id: string }>
-    cache: Map<string, DiscordChannelLike>
+    cache: { get(key: string): DiscordChannelLike | undefined }
   }
 }
 
@@ -59,7 +59,7 @@ export interface ChannelManagerDeps {
   routingConfig: RoutingConfig
   routingPath: string
   statePath: string
-  client: { guilds: { cache: Map<string, DiscordGuildLike> } }
+  client: { guilds: { cache: { get(key: string): DiscordGuildLike | undefined } } }
   sendEmbed: (channelId: string, embed: EmbedBuilder) => Promise<string>
   addReactions: (channelId: string, messageId: string, emojis: string[]) => Promise<void>
 }
