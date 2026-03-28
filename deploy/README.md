@@ -13,7 +13,7 @@ Run locally on your laptop, or deploy to a VPS for 24/7 always-on operation. Bus
 
 ```bash
 # As root on a fresh VPS:
-curl -fsSL https://raw.githubusercontent.com/twaldin/claudecord/main/deploy/setup-vps.sh | bash
+curl -fsSL https://raw.githubusercontent.com/USERNAME/claudecord/main/deploy/setup-vps.sh | bash
 ```
 
 This installs Node.js, Claude Code CLI, clones the repo, creates a service user, and installs the systemd service.
@@ -29,7 +29,7 @@ sudo apt-get install -y nodejs tmux git
 npm install -g @anthropic-ai/claude-code
 
 # 3. Clone repo
-git clone https://github.com/twaldin/claudecord ~/claudecord
+git clone https://github.com/USERNAME/claudecord ~/claudecord
 cd ~/claudecord && npm install
 
 # 4. Configure

@@ -35,7 +35,7 @@ Pass the embed object as the `embed` parameter. You can include `text` alongside
 **Embed only:**
 ```json
 {
-  "chat_id": "1485084317272244274",
+  "chat_id": "000000000000000000",
   "embed": {
     "title": "PR #52 approved",
     "description": "All checks pass. Ready to merge.",
@@ -52,7 +52,7 @@ Pass the embed object as the `embed` parameter. You can include `text` alongside
 **Text + embed:**
 ```json
 {
-  "chat_id": "1485084317272244274",
+  "chat_id": "000000000000000000",
   "text": "Review complete.",
   "embed": {
     "title": "PR #52: Add status board",
@@ -93,7 +93,7 @@ System colors (used by daemon-generated embeds):
 
 ```json
 {
-  "chat_id": "1485084298982378106",
+  "chat_id": "000000000000000000",
   "embed": {
     "title": "PR #52: Add status board",
     "color": 15360581,
@@ -112,7 +112,7 @@ System colors (used by daemon-generated embeds):
 
 ```json
 {
-  "chat_id": "1485084317272244274",
+  "chat_id": "000000000000000000",
   "embed": {
     "title": "coder-fix-49 completed",
     "color": 5763719,
@@ -131,7 +131,7 @@ System colors (used by daemon-generated embeds):
 
 ```json
 {
-  "chat_id": "1485084226926940307",
+  "chat_id": "000000000000000000",
   "embed": {
     "title": "Daily summary",
     "color": 5763719,

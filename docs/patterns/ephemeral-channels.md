@@ -9,7 +9,7 @@ Each ephemeral agent (coder, researcher, evaluator) gets its own Discord channel
 `spawn_teammate` is a bash script. After writing to `registry.tsv` and creating the tmux pane, it POSTs to the daemon:
 
 ```bash
-curl -s -X POST http://localhost:3000/agent/spawn \
+curl -s -X POST http://localhost:19532/agent/spawn \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $CLAUDECORD_API_SECRET" \
   -d '{
