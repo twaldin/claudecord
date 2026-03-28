@@ -7,6 +7,7 @@ import { createHttpApi } from './http-api.js'
 import { loadRouting, resolveAgent } from './routing.js'
 import { createChannelManager, type ChannelManagerDeps, type ChannelManager } from './channel-manager.js'
 import { createStatusBoard } from './status-board.js'
+import type { AgentStatusEntry } from '../shared/types.js'
 
 const PID_FILE = resolve(homedir(), '.claudecord-daemon.pid')
 
@@ -151,12 +152,44 @@ async function main() {
       sendEmbed: discord.sendBuiltEmbed,
       editMessage: discord.editBuiltEmbed,
       channelId: process.env['DISCORD_STATUS_CHANNEL_ID'],
-      getSnapshot: () => ({
-        agents: [],
-        taskCounts: { p0: 0, p1: 0, p2: 0 },
-        systemHealth: 'healthy' as const,
-        lastUpdated: new Date().toISOString(),
-      }),
+      getSnapshot: () => {
+        const now = new Date().toISOString()
+        const orchestrator: AgentStatusEntry = {
+          name: 'orchestrator',
+          type: 'persistent',
+          status: 'working',
+          lastActivity: now,
+        }
+        const registeredEntries: AgentStatusEntry[] = api.getRegisteredAgents().map(agentName => ({
+          name: agentName,
+          type: 'persistent' as const,
+          status: 'idle' as const,
+          lastActivity: now,
+        }))
+        const channelEntries: AgentStatusEntry[] = channelManager
+          ? channelManager.getState().map(entry => ({
+              name: entry.agentName,
+              type: entry.agentType,
+              status: entry.status === 'active' ? ('working' as const) : ('dead' as const),
+              lastActivity: entry.diedAt ?? entry.spawnedAt,
+              channelId: entry.channelId,
+            }))
+          : []
+        const seen = new Set<string>()
+        const agents: AgentStatusEntry[] = []
+        for (const entry of [orchestrator, ...registeredEntries, ...channelEntries]) {
+          if (!seen.has(entry.name)) {
+            seen.add(entry.name)
+            agents.push(entry)
+          }
+        }
+        return {
+          agents,
+          taskCounts: { p0: 0, p1: 0, p2: 0 },
+          systemHealth: 'healthy' as const,
+          lastUpdated: now,
+        }
+      },
       intervalMs: 60000,
     })
     statusBoard.start()
