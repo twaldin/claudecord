@@ -1,0 +1,52 @@
+#!/bin/bash
+# approve_prompt — Send Enter to an agent's pane to approve a permission prompt
+# Usage: approve_prompt <agent_name>
+# Or:    approve_prompt --all  (check all agents and approve any stuck ones)
+
+set -e
+SESSION="claudecord"
+REGISTRY="$HOME/claudecord/registry.tsv"
+
+approve_pane() {
+  local name="$1" win="$2" pane="$3"
+  local content
+  content=$(tmux capture-pane -t "$SESSION:$win.$pane" -p 2>/dev/null || true)
+
+  # Check for permission prompt indicators
+  if echo "$content" | grep -q "Do you want to proceed\|Do you want to create\|permission\|❯ 1\. Yes" 2>/dev/null; then
+    tmux send-keys -t "$SESSION:$win.$pane" Enter
+    echo "  ✓ $name — approved prompt"
+    return 0
+  fi
+  return 1
+}
+
+if [ "$1" = "--all" ]; then
+  echo "=== Checking all agents for permission prompts ==="
+  found=0
+  while IFS='|' read -r name win pane status dir spawned; do
+    [[ "$name" == \#* ]] && continue
+    [ -z "$name" ] && continue
+    [ "$status" != "alive" ] && continue
+    if approve_pane "$name" "$win" "$pane" 2>/dev/null; then
+      found=$((found + 1))
+    fi
+  done < "$REGISTRY"
+  if [ $found -eq 0 ]; then
+    echo "  No agents stuck on prompts"
+  fi
+elif [ -n "$1" ]; then
+  # Find specific agent
+  entry=$(grep "^$1|.*|alive" "$REGISTRY" 2>/dev/null | tail -1)
+  if [ -z "$entry" ]; then
+    echo "ERROR: agent '$1' not found or not alive"
+    exit 1
+  fi
+  win=$(echo "$entry" | cut -d'|' -f2)
+  pane=$(echo "$entry" | cut -d'|' -f3)
+  tmux send-keys -t "$SESSION:$win.$pane" Enter
+  echo "Sent Enter to $1 ($win.$pane)"
+else
+  echo "Usage: approve_prompt <agent_name>"
+  echo "       approve_prompt --all"
+fi
