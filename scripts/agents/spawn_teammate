@@ -82,7 +82,7 @@ MODEL_FLAG="--model $MODEL"
 if [ "$MODE" = "worktree" ]; then
   CLAUDE_CMD="claude --worktree --dangerously-skip-permissions $MODEL_FLAG"
 else
-  CLAUDE_CMD="claude --dangerously-load-development-channels server:claudecord --dangerously-skip-permissions $MODEL_FLAG"
+  CLAUDE_CMD="claude --dangerously-skip-permissions $MODEL_FLAG"
 fi
 
 # Create new pane with CLAUDECORD_AGENT_NAME exported so all scripts inherit it

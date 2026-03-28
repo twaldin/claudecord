@@ -61,7 +61,7 @@ fi
 
 # Create tmux session with orchestrator in pane 0
 tmux new-session -d -s "$SESSION" -c "$ORCHESTRATOR_DIR" \
-  "export PATH=\"$CLAUDECORD_HOME/scripts/agents:$CLAUDECORD_HOME/scripts/tools:\$PATH\"; claude --dangerously-load-development-channels server:claudecord --permission-mode dontAsk"
+  "export PATH=\"$CLAUDECORD_HOME/scripts/agents:$CLAUDECORD_HOME/scripts/tools:\$PATH\"; claude --permission-mode dontAsk"
 
 # Register orchestrator
 echo "orchestrator|0|0|alive|$ORCHESTRATOR_DIR|$(date -Iseconds)" >> "$REGISTRY"
