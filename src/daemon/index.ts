@@ -6,7 +6,6 @@ import { createDiscordClient } from './discord.js'
 import { createHttpApi } from './http-api.js'
 import { loadRouting, resolveAgent } from './routing.js'
 import { createChannelManager, type ChannelManagerDeps, type ChannelManager } from './channel-manager.js'
-import { buildSpawnEmbed } from './embeds.js'
 import { createStatusBoard } from './status-board.js'
 import { registerSlashCommands, handleInteraction } from './slash-commands.js'
 import { loadStats, getStatsForPeriod } from './stats.js'
@@ -60,7 +59,7 @@ async function main() {
     process.exit(1)
   }
 
-  const port = parseInt(process.env['CLAUDECORD_PORT'] ?? process.env['CLAUDECORD_ROUTER_PORT'] ?? '19532', 10)
+  const port = parseInt(process.env['CLAUDECORD_ROUTER_PORT'] ?? '19532', 10)
   const routingPath = resolve(
     process.env['ROUTING_CONFIG'] ?? resolve(import.meta.dirname, '../../config/routing.json')
   )
@@ -113,16 +112,6 @@ async function main() {
       const channelId = await channelManager.createAgentChannel(data.agentName, data.agentType, data.task)
       return { channelId }
     },
-    onSpawnNotify: async (data) => {
-      if (!codeStatusChannelId) return
-      const embed = buildSpawnEmbed({
-        agentName: data.agentName,
-        agentType: data.agentType,
-        task: data.task ?? '',
-        spawnedAt: new Date().toISOString(),
-      })
-      await discord.sendBuiltEmbed(codeStatusChannelId, embed)
-    },
     onAgentDied: async ({ agentName }) => {
       if (!channelManager) return
       const entry = channelManager.getState().find(e => e.agentName === agentName && e.status === 'active')
@@ -165,7 +154,7 @@ async function main() {
 
   // Wire slash command interaction handler
   const statsFilePath = resolve(homedir(), '.claudecord-stats.json')
-  const tasksFilePath = process.env['TASKS_PATH'] ?? resolve(homedir(), 'claudecord/memory/tasks.md')
+  const tasksFilePath = process.env['TASKS_PATH'] ?? resolve(homedir(), '.lifeos/memory/tasks.md')
   const allowedUserIds = process.env['DISCORD_ALLOWED_USERS']
     ?.split(',').map(s => s.trim()).filter(Boolean) ?? []
 
