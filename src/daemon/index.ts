@@ -6,6 +6,7 @@ import { createDiscordClient } from './discord.js'
 import { createHttpApi } from './http-api.js'
 import { loadRouting, resolveAgent } from './routing.js'
 import { createChannelManager, type ChannelManagerDeps, type ChannelManager } from './channel-manager.js'
+import { buildSpawnEmbed } from './embeds.js'
 import { createStatusBoard } from './status-board.js'
 import { registerSlashCommands, handleInteraction } from './slash-commands.js'
 import { loadStats, getStatsForPeriod } from './stats.js'
@@ -111,6 +112,16 @@ async function main() {
       if (!channelManager) return { channelId: '' }
       const channelId = await channelManager.createAgentChannel(data.agentName, data.agentType, data.task)
       return { channelId }
+    },
+    onSpawnNotify: async (data) => {
+      if (!codeStatusChannelId) return
+      const embed = buildSpawnEmbed({
+        agentName: data.agentName,
+        agentType: data.agentType,
+        task: data.task ?? '',
+        spawnedAt: new Date().toISOString(),
+      })
+      await discord.sendBuiltEmbed(codeStatusChannelId, embed)
     },
     onAgentDied: async ({ agentName }) => {
       if (!channelManager) return

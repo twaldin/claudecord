@@ -1,9 +1,10 @@
 import express, { type Request, type Response } from 'express'
-import type { ChannelMessage, AgentReply, AgentSpawnBody, WorkCompletedBody, AgentHeartbeatBody } from '../shared/types.js'
+import type { ChannelMessage, AgentReply, AgentSpawnBody, WorkCompletedBody, AgentHeartbeatBody, AgentType } from '../shared/types.js'
 
 export interface HttpApiDeps {
   onReply: (reply: AgentReply) => Promise<void>
   onAgentSpawn?: (data: AgentSpawnBody) => Promise<{ channelId: string }>
+  onSpawnNotify?: (data: { agentName: string; agentType: AgentType; task?: string; channelId?: string }) => Promise<void>
   onAgentDied?: (data: { agentName: string }) => Promise<void>
   onWorkCompleted?: (data: WorkCompletedBody) => Promise<void>
   onAgentHeartbeat?: (data: AgentHeartbeatBody) => Promise<void>
@@ -121,6 +122,14 @@ export function createHttpApi(deps: HttpApiDeps) {
     handler(spawnData)
       .then(({ channelId }) => {
         res.json({ ok: true, channelId })
+        if (deps.onSpawnNotify) {
+          void deps.onSpawnNotify({
+            agentName: spawnData.agentName,
+            agentType: spawnData.agentType,
+            task: spawnData.task,
+            channelId,
+          })
+        }
       })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : 'Unknown error'
