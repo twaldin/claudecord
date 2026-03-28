@@ -6,6 +6,7 @@ import { createDiscordClient } from './discord.js'
 import { createHttpApi } from './http-api.js'
 import { loadRouting, resolveAgent } from './routing.js'
 import { createChannelManager, type ChannelManagerDeps, type ChannelManager } from './channel-manager.js'
+import { createStatusBoard } from './status-board.js'
 
 const PID_FILE = resolve(homedir(), '.claudecord-daemon.pid')
 
@@ -143,6 +144,23 @@ async function main() {
     setInterval(() => cm.runCleanupTimer?.(), 10 * 60 * 1000)
   } else {
     console.warn('[daemon] DISCORD_GUILD_ID not set, channel manager disabled')
+  }
+
+  if (process.env['DISCORD_STATUS_CHANNEL_ID']) {
+    const statusBoard = createStatusBoard({
+      sendEmbed: discord.sendBuiltEmbed,
+      editMessage: discord.editBuiltEmbed,
+      channelId: process.env['DISCORD_STATUS_CHANNEL_ID'],
+      getSnapshot: () => ({
+        agents: [],
+        taskCounts: { p0: 0, p1: 0, p2: 0 },
+        systemHealth: 'healthy' as const,
+        lastUpdated: new Date().toISOString(),
+      }),
+      intervalMs: 60000,
+    })
+    statusBoard.start()
+    console.log('[daemon] Status board started')
   }
 
   const server = api.app.listen(port, () => {
