@@ -16,14 +16,14 @@ set -e
 
 NAME="$1"
 SESSION="claudecord"
-CLAUDECORD_HOME="${CLAUDECORD_HOME:-$HOME/claudecord}"
-REGISTRY="$CLAUDECORD_HOME/registry.tsv"
+REGISTRY="$HOME/claudecord/registry.tsv"
 MODEL="sonnet"  # default
 
 # Parse args
 shift
 MODE="agent"
 DIR=""
+TASK_DESC=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --project)
@@ -33,6 +33,10 @@ while [ $# -gt 0 ]; do
       ;;
     --model)
       MODEL="$2"
+      shift 2
+      ;;
+    --task)
+      TASK_DESC="$2"
       shift 2
       ;;
     *)
@@ -88,7 +92,7 @@ fi
 # Create new pane with CLAUDECORD_AGENT_NAME exported so all scripts inherit it
 PANE_INDEX=$(tmux split-window -t "$SESSION:$WINDOW" -h -P -F '#{pane_index}' \
   -c "$DIR" \
-  "export CLAUDECORD_AGENT_NAME='$NAME'; export CLAUDECORD_HOME=\"$CLAUDECORD_HOME\"; export PATH=\"$CLAUDECORD_HOME/scripts:\$PATH\"; $CLAUDE_CMD 2>&1; echo '[AGENT $NAME EXITED]'; read")
+  "export CLAUDECORD_AGENT_NAME='$NAME'; export PATH=\"$HOME/claudecord/scripts:\$PATH\"; $CLAUDE_CMD 2>&1; echo '[AGENT $NAME EXITED]'; read")
 
 # Title the pane for identification
 tmux select-pane -t "$SESSION:$WINDOW.$PANE_INDEX" -T "$NAME"
@@ -97,6 +101,12 @@ tmux select-pane -t "$SESSION:$WINDOW.$PANE_INDEX" -T "$NAME"
 sleep 3
 tmux send-keys -t "$SESSION:$WINDOW.$PANE_INDEX" Enter
 
+# Send task as first prompt if provided
+if [ -n "$TASK_DESC" ]; then
+  sleep 2
+  tmux send-keys -t "$SESSION:$WINDOW.$PANE_INDEX" "$TASK_DESC" Enter
+fi
+
 # Register (format: name|window|pane|status|directory|spawned_at)
 echo "$NAME|$WINDOW|$PANE_INDEX|alive|$DIR|$(date -Iseconds)" >> "$REGISTRY"
 
@@ -104,7 +114,7 @@ DAEMON_URL="${CLAUDECORD_DAEMON_URL:-http://localhost:19532}"
 curl -sf -X POST "$DAEMON_URL/agent/spawn" \
   -H "Content-Type: application/json" \
   ${CLAUDECORD_API_SECRET:+-H "Authorization: Bearer $CLAUDECORD_API_SECRET"} \
-  -d "{\"agentName\":\"$NAME\",\"agentType\":\"coder\",\"task\":\"${CLAUDECORD_SPAWN_TASK:-}\",\"worktreePath\":\"$DIR\"}" \
+  -d "{\"agentName\":\"$NAME\",\"agentType\":\"coder\",\"task\":\"${TASK_DESC:-}\",\"worktreePath\":\"$DIR\"}" \
   >/dev/null 2>&1 || true
 
 echo "Spawned $NAME ($MODE mode, $MODEL) in pane $WINDOW.$PANE_INDEX at $DIR"
