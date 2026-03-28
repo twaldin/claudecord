@@ -96,7 +96,6 @@ echo "Substituting placeholders..."
 # Use | as delimiter to avoid issues with / in paths.
 substitutions=(
   "s|{{user_name}}|${USER_NAME}|g"
-  "s|{{claudecord_home}}|${CLAUDECORD_HOME_VAL}|g"
   "s|{{channel_main}}|${CHANNEL_MAIN}|g"
   "s|{{channel_orchestrator_id}}|${CHANNEL_MAIN}|g"
   "s|{{channel_alerts}}|${CHANNEL_ALERTS}|g"
@@ -122,7 +121,9 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 
-mapfile -t target_files < <(find "$REPO_ROOT/agents" -type f \( -name "CLAUDE.md" -o -name ".mcp.json" -o -name "*.md" \) 2>/dev/null)
+# .mcp.json files are written fresh (not sed-patched) to avoid permission prompts in Claude Code.
+# Collect only markdown files for sed substitution.
+mapfile -t target_files < <(find "$REPO_ROOT/agents" -type f -name "*.md" 2>/dev/null)
 
 if [[ ${#target_files[@]} -eq 0 ]]; then
   echo "WARNING: No agent files found in $REPO_ROOT/agents" >&2
@@ -143,6 +144,39 @@ for file in "${target_files[@]}"; do
 
   sed_inplace "${sed_args[@]}" "$file"
   echo "  ✓ $file"
+done
+
+# ── Write .mcp.json files fresh (not sed-patched) ────────────────────────────
+# Avoids Claude Code permission prompts triggered by in-place edits to .mcp.json.
+write_mcp_json() {
+  local agent_name="$1"
+  local agent_dir="$REPO_ROOT/agents/$agent_name"
+  local mcp_path="$agent_dir/.mcp.json"
+
+  if [[ ! -d "$agent_dir" ]]; then
+    return
+  fi
+
+  cat > "$mcp_path" << EOF
+{
+  "mcpServers": {
+    "claudecord": {
+      "command": "${CLAUDECORD_HOME_VAL}/node_modules/.bin/tsx",
+      "args": ["${CLAUDECORD_HOME_VAL}/src/shim/index.ts"],
+      "env": {
+        "CLAUDECORD_AGENT_NAME": "${agent_name}",
+        "CLAUDECORD_DAEMON_URL": "http://localhost:19532",
+        "CLAUDECORD_API_SECRET": ""
+      }
+    }
+  }
+}
+EOF
+  echo "  ✓ $mcp_path"
+}
+
+for agent in orchestrator architect evaluator researcher; do
+  write_mcp_json "$agent"
 done
 
 # ── Verify remaining placeholders ─────────────────────────────────────────────
