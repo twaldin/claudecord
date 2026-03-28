@@ -6,15 +6,16 @@ set -e
 
 NAME="$1"
 SESSION="claudecord"
-REGISTRY="$HOME/claudecord/registry.tsv"
+CLAUDECORD_HOME="${CLAUDECORD_HOME:-$HOME/claudecord}"
+REGISTRY="$CLAUDECORD_HOME/registry.tsv"
 
 if [ -z "$NAME" ]; then
   echo "Usage: kill_teammate <name>"
   exit 1
 fi
 
-if [ "$NAME" = "lifeos" ]; then
-  echo "ERROR: Cannot kill LifeOS (the manager). Use 'tmux kill-session -t claudecord' to shut everything down."
+if [ "$NAME" = "orchestrator" ]; then
+  echo "ERROR: Cannot kill the orchestrator (the manager). Use 'tmux kill-session -t claudecord' to shut everything down."
   exit 1
 fi
 
