@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "claudecord": {
+      "command": "{{claudecord_home}}/node_modules/.bin/tsx",
+      "args": ["{{claudecord_home}}/src/shim/index.ts"],
+      "env": {
+        "CLAUDECORD_AGENT_NAME": "orchestrator",
+        "CLAUDECORD_DAEMON_URL": "http://localhost:19532"
+      }
+    }
+  }
+}
