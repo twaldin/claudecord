@@ -16,7 +16,8 @@ set -e
 
 NAME="$1"
 SESSION="claudecord"
-REGISTRY="$HOME/claudecord/registry.tsv"
+CLAUDECORD_HOME="${CLAUDECORD_HOME:-$HOME/claudecord}"
+REGISTRY="$CLAUDECORD_HOME/registry.tsv"
 MODEL="sonnet"  # default
 
 # Parse args
@@ -87,7 +88,7 @@ fi
 # Create new pane with CLAUDECORD_AGENT_NAME exported so all scripts inherit it
 PANE_INDEX=$(tmux split-window -t "$SESSION:$WINDOW" -h -P -F '#{pane_index}' \
   -c "$DIR" \
-  "export CLAUDECORD_AGENT_NAME='$NAME'; export PATH=\"$HOME/claudecord/scripts:\$PATH\"; $CLAUDE_CMD 2>&1; echo '[AGENT $NAME EXITED]'; read")
+  "export CLAUDECORD_AGENT_NAME='$NAME'; export CLAUDECORD_HOME=\"$CLAUDECORD_HOME\"; export PATH=\"$CLAUDECORD_HOME/scripts:\$PATH\"; $CLAUDE_CMD 2>&1; echo '[AGENT $NAME EXITED]'; read")
 
 # Title the pane for identification
 tmux select-pane -t "$SESSION:$WINDOW.$PANE_INDEX" -T "$NAME"

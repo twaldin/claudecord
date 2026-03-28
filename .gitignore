@@ -7,3 +7,4 @@ coverage/
 agents/**/.claude/scheduled_tasks.lock
 *.pid
 agents/*/state.md
+CLAUDE.md
