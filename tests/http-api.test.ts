@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
 import { createHttpApi } from '../src/daemon/http-api.js'
 import type { Server } from 'http'
 import type { AgentReply, ChannelMessage } from '../src/shared/types.js'
@@ -102,5 +102,66 @@ describe('HTTP API', () => {
       body: JSON.stringify({ channelId: 'ch1' }),
     })
     expect(res.status).toBe(400)
+  })
+})
+
+describe('HTTP API auth', () => {
+  const SECRET = 'test-secret-xyz'
+  let authServer: Server
+  let authPort: number
+
+  function authUrl(path: string) {
+    return `http://localhost:${authPort}${path}`
+  }
+
+  beforeAll(async () => {
+    process.env['CLAUDECORD_API_SECRET'] = SECRET
+    const api = createHttpApi({ onReply: async () => {} })
+    await new Promise<void>((resolve) => {
+      authServer = api.app.listen(0, () => {
+        const addr = authServer.address()
+        if (addr && typeof addr === 'object') authPort = addr.port
+        resolve()
+      })
+    })
+  })
+
+  afterAll(() => {
+    delete process.env['CLAUDECORD_API_SECRET']
+    authServer.close()
+  })
+
+  it('rejects requests without Authorization header', async () => {
+    const res = await fetch(authUrl('/register'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentName: 'x' }),
+    })
+    expect(res.status).toBe(401)
+  })
+
+  it('rejects requests with wrong secret', async () => {
+    const res = await fetch(authUrl('/register'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer wrong' },
+      body: JSON.stringify({ agentName: 'x' }),
+    })
+    expect(res.status).toBe(401)
+  })
+
+  it('accepts requests with correct secret', async () => {
+    const res = await fetch(authUrl('/register'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SECRET}` },
+      body: JSON.stringify({ agentName: 'authagent' }),
+    })
+    expect(res.status).toBe(200)
+    const data = await res.json() as { ok: boolean }
+    expect(data.ok).toBe(true)
+  })
+
+  it('allows /health without Authorization header', async () => {
+    const res = await fetch(authUrl('/health'))
+    expect(res.status).toBe(200)
   })
 })
