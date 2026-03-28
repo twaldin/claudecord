@@ -232,5 +232,9 @@ export function createHttpApi(deps: HttpApiDeps) {
     }
   }
 
-  return { app, enqueueMessage }
+  function getRegisteredAgents(): string[] {
+    return Array.from(registeredAgents)
+  }
+
+  return { app, enqueueMessage, getRegisteredAgents }
 }
