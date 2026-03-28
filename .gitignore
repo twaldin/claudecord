@@ -8,3 +8,10 @@ agents/**/.claude/scheduled_tasks.lock
 *.pid
 agents/*/state.md
 CLAUDE.md
+
+# Runtime-generated files
+config/routing.json
+channel-state.json
+stats.json
+registry.tsv
+heartbeat.log

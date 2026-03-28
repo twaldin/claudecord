@@ -60,7 +60,7 @@ async function main() {
     process.exit(1)
   }
 
-  const port = parseInt(process.env['CLAUDECORD_ROUTER_PORT'] ?? '19532', 10)
+  const port = parseInt(process.env['CLAUDECORD_PORT'] ?? process.env['CLAUDECORD_ROUTER_PORT'] ?? '19532', 10)
   const routingPath = resolve(
     process.env['ROUTING_CONFIG'] ?? resolve(import.meta.dirname, '../../config/routing.json')
   )
