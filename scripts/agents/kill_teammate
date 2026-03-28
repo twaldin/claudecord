@@ -4,11 +4,14 @@
 
 set -e
 
-sed_inplace() { if [[ "$OSTYPE" == "darwin"* ]]; then sed -i '' "$@"; else sed -i "$@"; fi; }
+# Source .env for API secret
+CLAUDECORD_HOME="${CLAUDECORD_HOME:-$HOME/claudecord}"
+if [ -f "$CLAUDECORD_HOME/.env" ]; then
+  set -a; source "$CLAUDECORD_HOME/.env"; set +a
+fi
 
 NAME="$1"
 SESSION="claudecord"
-CLAUDECORD_HOME="${CLAUDECORD_HOME:-$HOME/claudecord}"
 REGISTRY="$CLAUDECORD_HOME/registry.tsv"
 
 if [ -z "$NAME" ]; then
@@ -16,8 +19,8 @@ if [ -z "$NAME" ]; then
   exit 1
 fi
 
-if [ "$NAME" = "orchestrator" ]; then
-  echo "ERROR: Cannot kill the orchestrator (the manager). Use 'tmux kill-session -t claudecord' to shut everything down."
+if [ "$NAME" = "lifeos" ]; then
+  echo "ERROR: Cannot kill LifeOS (the manager). Use 'tmux kill-session -t claudecord' to shut everything down."
   exit 1
 fi
 
@@ -42,6 +45,6 @@ curl -sf -X POST "$DAEMON_URL/agent/died" \
 tmux kill-pane -t "$SESSION:$WINDOW.$PANE_INDEX" 2>/dev/null || true
 
 # Mark dead in registry
-sed_inplace "s/^$NAME|$WINDOW|$PANE_INDEX|alive/$NAME|$WINDOW|$PANE_INDEX|dead/" "$REGISTRY"
+sed -i '' "s/^$NAME|$WINDOW|$PANE_INDEX|alive/$NAME|$WINDOW|$PANE_INDEX|dead/" "$REGISTRY"
 
 echo "Killed $NAME (was pane $WINDOW.$PANE_INDEX)"
