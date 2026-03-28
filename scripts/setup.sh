@@ -189,8 +189,32 @@ else
   echo "All placeholders filled."
 fi
 
+# ── Create config/routing.json from example ──────────────────────────────────
+ROUTING_EXAMPLE="$REPO_ROOT/config/routing.example.json"
+ROUTING_JSON="$REPO_ROOT/config/routing.json"
+
+if [[ ! -f "$ROUTING_JSON" ]]; then
+  cp "$ROUTING_EXAMPLE" "$ROUTING_JSON"
+
+  # Substitute channel IDs into routing.json
+  routing_subs=(
+    "s|000000000000000001|${CHANNEL_MAIN}|g"
+    "s|000000000000000002|${CHANNEL_ALERTS}|g"
+    "s|000000000000000003|${CHANNEL_DAILY}|g"
+    "s|000000000000000004|${CHANNEL_EVAL}|g"
+    "s|000000000000000005|${CHANNEL_RESEARCH}|g"
+  )
+  routing_args=()
+  for sub in "${routing_subs[@]}"; do
+    routing_args+=("-e" "$sub")
+  done
+  sed_inplace "${routing_args[@]}" "$ROUTING_JSON"
+  echo "  ✓ $ROUTING_JSON"
+else
+  echo "  (skipped) $ROUTING_JSON already exists"
+fi
+
 echo ""
 echo "Setup complete. Next:"
 echo "  1. Edit .env — add DISCORD_BOT_TOKEN and ANTHROPIC_API_KEY"
-echo "  2. Edit config/routing.json — map channel IDs to agents"
-echo "  3. bash scripts/start.sh"
+echo "  2. bash scripts/start.sh"
