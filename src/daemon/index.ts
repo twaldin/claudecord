@@ -7,7 +7,10 @@ import { createHttpApi } from './http-api.js'
 import { loadRouting, resolveAgent } from './routing.js'
 import { createChannelManager, type ChannelManagerDeps, type ChannelManager } from './channel-manager.js'
 import { createStatusBoard } from './status-board.js'
+import { registerSlashCommands, handleInteraction } from './slash-commands.js'
+import { loadStats, getStatsForPeriod } from './stats.js'
 import type { AgentStatusEntry } from '../shared/types.js'
+import type { SlashCommandDeps } from './slash-commands.js'
 
 const PID_FILE = resolve(homedir(), '.claudecord-daemon.pid')
 
@@ -126,10 +129,12 @@ async function main() {
   await discord.login()
 
   if (guildId) {
+    registerSlashCommands(discord.client, guildId)
+
     if (codeStatusChannelId) {
       console.log(`[daemon] Code status channel: ${codeStatusChannelId}`)
     }
-    const deps: ChannelManagerDeps = {
+    const cmDeps: ChannelManagerDeps = {
       guildId,
       everyoneRoleId: guildId,
       routingConfig,
@@ -139,13 +144,58 @@ async function main() {
       sendEmbed: discord.sendBuiltEmbed,
       addReactions: discord.addReactions,
     }
-    channelManager = createChannelManager(deps)
+    channelManager = createChannelManager(cmDeps)
     console.log('[daemon] Channel manager initialized')
     const cm = channelManager as ChannelManager & { runCleanupTimer?: () => void }
     setInterval(() => cm.runCleanupTimer?.(), 10 * 60 * 1000)
   } else {
     console.warn('[daemon] DISCORD_GUILD_ID not set, channel manager disabled')
   }
+
+  // Wire slash command interaction handler
+  const statsFilePath = resolve(homedir(), '.claudecord-stats.json')
+  const tasksFilePath = process.env['TASKS_PATH'] ?? resolve(homedir(), '.lifeos/memory/tasks.md')
+  const allowedUserIds = process.env['DISCORD_ALLOWED_USERS']
+    ?.split(',').map(s => s.trim()).filter(Boolean) ?? []
+
+  function buildSnapshot() {
+    const now = new Date().toISOString()
+    const orchestrator: AgentStatusEntry = {
+      name: 'orchestrator', type: 'persistent', status: 'working', lastActivity: now,
+    }
+    const registeredEntries: AgentStatusEntry[] = api.getRegisteredAgents().map(agentName => ({
+      name: agentName, type: 'persistent' as const, status: 'idle' as const, lastActivity: now,
+    }))
+    const channelEntries: AgentStatusEntry[] = channelManager
+      ? channelManager.getState().map(entry => ({
+          name: entry.agentName, type: entry.agentType,
+          status: entry.status === 'active' ? 'working' as const : 'dead' as const,
+          lastActivity: entry.diedAt ?? entry.spawnedAt,
+          channelId: entry.channelId,
+        }))
+      : []
+    const seen = new Set<string>()
+    const agents: AgentStatusEntry[] = []
+    for (const entry of [orchestrator, ...registeredEntries, ...channelEntries]) {
+      if (!seen.has(entry.name)) { seen.add(entry.name); agents.push(entry) }
+    }
+    return { agents, taskCounts: { p0: 0, p1: 0, p2: 0 }, systemHealth: 'healthy' as const, lastUpdated: now }
+  }
+
+  const slashDeps: SlashCommandDeps = {
+    getSnapshot: buildSnapshot,
+    getStats: (period) => getStatsForPeriod(loadStats(statsFilePath), period),
+    getRegisteredAgents: () => api.getRegisteredAgents(),
+    channelManager: channelManager ?? undefined,
+    allowedUsers: allowedUserIds,
+    statsPath: statsFilePath,
+    tasksPath: tasksFilePath,
+  }
+
+  discord.client.on('interactionCreate', (interaction) => {
+    if (!interaction.isChatInputCommand() && !interaction.isAutocomplete()) return
+    void handleInteraction(interaction, slashDeps)
+  })
 
   if (process.env['DISCORD_STATUS_CHANNEL_ID']) {
     const statusBoard = createStatusBoard({

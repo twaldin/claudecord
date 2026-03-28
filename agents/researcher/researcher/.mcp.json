@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "claudecord": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["tsx", "/Users/twaldin/claudecord/src/shim/index.ts"],
+      "env": {
+        "CLAUDECORD_AGENT_NAME": "researcher",
+        "CLAUDECORD_DAEMON_URL": "http://localhost:19532",
+        "CLAUDECORD_API_SECRET": "10b01d0d943859f5356083065eaf514d93ac94483a5619eb"
+      }
+    },
+    "reddit": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "reddit-mcp-server"],
+      "env": {}
+    }
+  }
+}
