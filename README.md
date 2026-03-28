@@ -66,30 +66,14 @@ cp config/routing.example.json config/routing.json
 # Edit routing.json: map your Discord channel IDs to agents
 ```
 
-**3. Set up agent directories**
+**3. Fill in your configuration**
 ```bash
-mkdir -p agents/orchestrator agents/coder
-
-# Create .mcp.json in each agent dir to load the shim
-cat > agents/orchestrator/.mcp.json << 'EOF'
-{
-  "mcpServers": {
-    "claudecord": {
-      "command": "npx",
-      "args": ["tsx", "/path/to/claudecord/src/shim/index.ts"],
-      "env": {
-        "CLAUDECORD_AGENT_NAME": "orchestrator",
-        "CLAUDECORD_DAEMON_URL": "http://localhost:19532"
-      }
-    }
-  }
-}
-EOF
-
-# Copy orchestrator CLAUDE.md and fill in your channel IDs
-cp agents/orchestrator/CLAUDE.md agents/orchestrator/CLAUDE.md
-# Edit: replace {{user_name}}, {{channel_*}} placeholders
+bash scripts/setup.sh
 ```
+
+This prompts for your name, Discord channel IDs, and project directory, then
+substitutes all `{{placeholders}}` across the agent CLAUDE.md files and `.mcp.json`.
+It also fills the install path into `agents/orchestrator/.mcp.json` so the shim loads correctly.
 
 **4. Start**
 ```bash
