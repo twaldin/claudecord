@@ -5,18 +5,16 @@
 set -e
 
 NAME="$1"
-SESSION="${CLAUDECORD_SESSION:-claudecord}"
-CLAUDECORD_HOME="${CLAUDECORD_HOME:-$HOME/claudecord}"
-REGISTRY="$CLAUDECORD_HOME/registry.tsv"
-ORCHESTRATOR="${CLAUDECORD_ORCHESTRATOR:-orchestrator}"
+SESSION="claudecord"
+REGISTRY="$HOME/claudecord/registry.tsv"
 
 if [ -z "$NAME" ]; then
   echo "Usage: kill_teammate <name>"
   exit 1
 fi
 
-if [ "$NAME" = "$ORCHESTRATOR" ]; then
-  echo "ERROR: Cannot kill the orchestrator agent. Use 'tmux kill-session -t $SESSION' to shut everything down."
+if [ "$NAME" = "lifeos" ]; then
+  echo "ERROR: Cannot kill LifeOS (the manager). Use 'tmux kill-session -t claudecord' to shut everything down."
   exit 1
 fi
 
@@ -29,6 +27,13 @@ fi
 # Registry format: name|window|pane|status|dir|spawned
 WINDOW=$(echo "$ENTRY" | cut -d'|' -f2)
 PANE_INDEX=$(echo "$ENTRY" | cut -d'|' -f3)
+
+DAEMON_URL="${CLAUDECORD_DAEMON_URL:-http://localhost:19532}"
+curl -sf -X POST "$DAEMON_URL/agent/died" \
+  -H "Content-Type: application/json" \
+  ${CLAUDECORD_API_SECRET:+-H "Authorization: Bearer $CLAUDECORD_API_SECRET"} \
+  -d "{\"agentName\":\"$NAME\"}" \
+  >/dev/null 2>&1 || true
 
 # Kill the pane
 tmux kill-pane -t "$SESSION:$WINDOW.$PANE_INDEX" 2>/dev/null || true

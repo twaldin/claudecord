@@ -5,6 +5,7 @@ import { config } from 'dotenv'
 import { createDiscordClient } from './discord.js'
 import { createHttpApi } from './http-api.js'
 import { loadRouting, resolveAgent } from './routing.js'
+import { createChannelManager, type ChannelManagerDeps, type ChannelManager } from './channel-manager.js'
 
 const PID_FILE = resolve(homedir(), '.claudecord-daemon.pid')
 
@@ -58,12 +59,18 @@ async function main() {
     process.env['ROUTING_CONFIG'] ?? resolve(import.meta.dirname, '../../config/routing.json')
   )
 
-  const routingConfig = loadRouting(routingPath)
+  let routingConfig = loadRouting(routingPath)
   console.log(`[daemon] Loaded routing: ${Object.keys(routingConfig.agents).join(', ')}`)
+
+  const guildId = process.env['DISCORD_GUILD_ID']
+  const codeStatusChannelId = process.env['DISCORD_CODE_STATUS_CHANNEL_ID']
+  const channelStatePath = resolve(homedir(), '.claudecord-channels.json')
 
   // Clean up old daemon if running
   cleanupOldPid()
   writePid()
+
+  let channelManager: ChannelManager | null = null
 
   const discord = createDiscordClient({
     token: discordToken,
@@ -75,6 +82,11 @@ async function main() {
       }
       console.log(`[daemon] ${msg.username} → ${agentName} (${msg.channelId}): ${msg.content.slice(0, 80)}`)
       api.enqueueMessage(agentName, msg)
+    },
+    onReaction: (messageId, emoji) => {
+      if (!channelManager) return
+      const entry = channelManager.getState().find(e => e.cleanupMessageId === messageId)
+      if (entry) channelManager.handleCleanupReaction(entry.channelId, emoji)
     },
   })
 
@@ -90,9 +102,48 @@ async function main() {
         await discord.sendToChannel(reply.channelId, reply.text ?? '', reply.replyTo)
       }
     },
+    onAgentSpawn: async (data) => {
+      if (!channelManager) return { channelId: '' }
+      const channelId = await channelManager.createAgentChannel(data.agentName, data.agentType, data.task)
+      return { channelId }
+    },
+    onAgentDied: async ({ agentName }) => {
+      if (!channelManager) return
+      const entry = channelManager.getState().find(e => e.agentName === agentName && e.status === 'active')
+      if (!entry) return
+      await channelManager.archiveAgentChannel(entry.channelId, agentName)
+    },
+    onWorkCompleted: async (data) => {
+      console.log('[daemon] work-completed:', data.agentName)
+    },
+    onAgentHeartbeat: async (data) => {
+      console.log('[daemon] heartbeat:', data.agentName, data.status, data.contextPct)
+    },
   })
 
   await discord.login()
+
+  if (guildId) {
+    if (codeStatusChannelId) {
+      console.log(`[daemon] Code status channel: ${codeStatusChannelId}`)
+    }
+    const deps: ChannelManagerDeps = {
+      guildId,
+      everyoneRoleId: guildId,
+      routingConfig,
+      routingPath,
+      statePath: channelStatePath,
+      client: discord.client as ChannelManagerDeps['client'],
+      sendEmbed: discord.sendBuiltEmbed,
+      addReactions: discord.addReactions,
+    }
+    channelManager = createChannelManager(deps)
+    console.log('[daemon] Channel manager initialized')
+    const cm = channelManager as ChannelManager & { runCleanupTimer?: () => void }
+    setInterval(() => cm.runCleanupTimer?.(), 10 * 60 * 1000)
+  } else {
+    console.warn('[daemon] DISCORD_GUILD_ID not set, channel manager disabled')
+  }
 
   const server = api.app.listen(port, () => {
     console.log(`[daemon] HTTP API listening on port ${port}`)
