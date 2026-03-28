@@ -1,0 +1,14 @@
+{
+  "agents": {
+    "orchestrator": {
+      "channels": ["{{channel_orchestrator_id}}", "{{channel_general_id}}"]
+    },
+    "coder": {
+      "channels": ["{{channel_coder_id}}"]
+    },
+    "researcher": {
+      "channels": ["{{channel_researcher_id}}"]
+    }
+  },
+  "defaultAgent": "orchestrator"
+}

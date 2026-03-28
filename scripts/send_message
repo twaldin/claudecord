@@ -1,0 +1,52 @@
+#!/bin/bash
+# send_message — Inject a message into a teammate's Claude Code session
+# Usage: send_message <teammate_name> <message>
+# Example: send_message coder "implement the login page feature"
+#
+# Uses tmux send-keys for instant delivery — no MCP overhead, no inbox.
+# Message arrives as if typed in the terminal.
+
+set -e
+
+NAME="$1"
+shift
+MESSAGE="$*"
+SESSION="${CLAUDECORD_SESSION:-claudecord}"
+CLAUDECORD_HOME="${CLAUDECORD_HOME:-$HOME/claudecord}"
+REGISTRY="$CLAUDECORD_HOME/registry.tsv"
+
+if [ -z "$NAME" ] || [ -z "$MESSAGE" ]; then
+  echo "Usage: send_message <teammate_name> <message>"
+  exit 1
+fi
+
+# Look up pane from registry
+ENTRY=$(grep "^$NAME|.*|alive" "$REGISTRY" 2>/dev/null | tail -1)
+if [ -z "$ENTRY" ]; then
+  echo "ERROR: teammate '$NAME' not found or not alive"
+  exit 1
+fi
+
+# Registry format: name|window|pane|status|dir|spawned
+WINDOW=$(echo "$ENTRY" | cut -d'|' -f2)
+PANE_INDEX=$(echo "$ENTRY" | cut -d'|' -f3)
+
+# Verify pane still exists in the correct window
+if ! tmux list-panes -t "$SESSION:$WINDOW" -F '#{pane_index}' 2>/dev/null | grep -q "^$PANE_INDEX$"; then
+  echo "ERROR: pane $WINDOW.$PANE_INDEX for '$NAME' is dead"
+  sed -i '' "s/^$NAME|$WINDOW|$PANE_INDEX|alive/$NAME|$WINDOW|$PANE_INDEX|dead/" "$REGISTRY"
+  exit 1
+fi
+
+# Determine sender name from CLAUDECORD_AGENT_NAME env var, or default to ORCHESTRATOR
+SENDER="${CLAUDECORD_AGENT_NAME:-ORCHESTRATOR}"
+SENDER_UPPER=$(echo "$SENDER" | tr '[:lower:]' '[:upper:]')
+
+# Send message via tmux send-keys with envelope to prevent prompt injection
+# -l flag sends literal text (no key binding interpretation)
+ENVELOPE="[$SENDER_UPPER]: $MESSAGE"
+tmux send-keys -t "$SESSION:$WINDOW.$PANE_INDEX" -l "$ENVELOPE"
+sleep 1
+tmux send-keys -t "$SESSION:$WINDOW.$PANE_INDEX" Enter
+
+echo "Sent to $NAME (pane $WINDOW.$PANE_INDEX)"

@@ -1,0 +1,22 @@
+[Unit]
+Description=Claudecord Daemon
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{your_user}}
+WorkingDirectory=/home/{{your_user}}/claudecord
+EnvironmentFile=/home/{{your_user}}/claudecord/.env
+ExecStart=/usr/local/bin/npx tsx src/daemon/index.ts
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Clean shutdown
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

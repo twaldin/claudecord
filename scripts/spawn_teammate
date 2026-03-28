@@ -1,0 +1,103 @@
+#!/bin/bash
+# spawn_teammate — Spawn a new Claude Code agent in a tmux pane
+#
+# Usage:
+#   spawn_teammate <name> <directory> [--model opus|sonnet|haiku]
+#   spawn_teammate <name> --project <project_dir> [--model opus|sonnet|haiku]
+#
+# Agent dir mode: launches claude in the given directory with its own CLAUDE.md + .mcp.json
+# Worktree mode:  launches `claude --worktree` from the project dir — inherits skills, CLAUDE.md, settings
+# --model:        select model tier (default: sonnet)
+#                 opus   — complex reasoning, specs, planning
+#                 sonnet — code implementation, reviews, monitoring (default)
+#                 haiku  — simple tasks, cron work
+
+set -e
+
+NAME="$1"
+SESSION="${CLAUDECORD_SESSION:-claudecord}"
+CLAUDECORD_HOME="${CLAUDECORD_HOME:-$HOME/claudecord}"
+REGISTRY="$CLAUDECORD_HOME/registry.tsv"
+MODEL="sonnet"  # default
+
+# Parse args
+shift
+MODE="agent"
+DIR=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --project)
+      MODE="worktree"
+      DIR="$2"
+      shift 2
+      ;;
+    --model)
+      MODEL="$2"
+      shift 2
+      ;;
+    *)
+      if [ -z "$DIR" ]; then
+        DIR="$1"
+      fi
+      shift
+      ;;
+  esac
+done
+
+if [ -z "$NAME" ] || [ -z "$DIR" ]; then
+  echo "Usage: spawn_teammate <name> <directory> [--model opus|sonnet|haiku]"
+  echo "       spawn_teammate <name> --project <project_dir> [--model opus|sonnet|haiku]"
+  echo ""
+  echo "Models: opus (complex), sonnet (default), haiku (simple)"
+  exit 1
+fi
+
+# Ensure directory exists
+if [ ! -d "$DIR" ]; then
+  echo "ERROR: directory $DIR does not exist"
+  exit 1
+fi
+
+# Ensure tmux session exists
+if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+  echo "ERROR: tmux session '$SESSION' does not exist. Run start.sh first."
+  exit 1
+fi
+
+# Check if already running (registry format: name|window|pane|status|dir|spawned)
+if grep -q "^$NAME|.*|alive" "$REGISTRY" 2>/dev/null; then
+  EXISTING_WIN=$(grep "^$NAME|.*|alive" "$REGISTRY" | tail -1 | cut -d'|' -f2)
+  EXISTING_PANE=$(grep "^$NAME|.*|alive" "$REGISTRY" | tail -1 | cut -d'|' -f3)
+  if tmux list-panes -t "$SESSION:$EXISTING_WIN" -F '#{pane_index}' 2>/dev/null | grep -q "^$EXISTING_PANE$"; then
+    echo "WARNING: $NAME already alive in pane $EXISTING_WIN.$EXISTING_PANE"
+    exit 0
+  fi
+fi
+
+# Get the active window index (agent will live in this window)
+WINDOW=$(tmux display-message -t "$SESSION" -p '#{window_index}')
+
+# Build the claude command based on mode + model
+MODEL_FLAG="--model $MODEL"
+if [ "$MODE" = "worktree" ]; then
+  CLAUDE_CMD="claude --worktree --dangerously-skip-permissions $MODEL_FLAG"
+else
+  CLAUDE_CMD="claude --dangerously-load-development-channels server:claudecord --dangerously-skip-permissions $MODEL_FLAG"
+fi
+
+# Create new pane with CLAUDECORD_AGENT_NAME exported so all scripts inherit it
+PANE_INDEX=$(tmux split-window -t "$SESSION:$WINDOW" -h -P -F '#{pane_index}' \
+  -c "$DIR" \
+  "export CLAUDECORD_AGENT_NAME='$NAME'; export PATH=\"$CLAUDECORD_HOME/scripts:\$PATH\"; $CLAUDE_CMD 2>&1; echo '[AGENT $NAME EXITED]'; read")
+
+# Title the pane for identification
+tmux select-pane -t "$SESSION:$WINDOW.$PANE_INDEX" -T "$NAME"
+
+# Auto-confirm prompts
+sleep 3
+tmux send-keys -t "$SESSION:$WINDOW.$PANE_INDEX" Enter
+
+# Register (format: name|window|pane|status|directory|spawned_at)
+echo "$NAME|$WINDOW|$PANE_INDEX|alive|$DIR|$(date -Iseconds)" >> "$REGISTRY"
+
+echo "Spawned $NAME ($MODE mode, $MODEL) in pane $WINDOW.$PANE_INDEX at $DIR"

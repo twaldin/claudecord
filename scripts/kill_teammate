@@ -1,0 +1,39 @@
+#!/bin/bash
+# kill_teammate — Stop a teammate agent
+# Usage: kill_teammate <name>
+
+set -e
+
+NAME="$1"
+SESSION="${CLAUDECORD_SESSION:-claudecord}"
+CLAUDECORD_HOME="${CLAUDECORD_HOME:-$HOME/claudecord}"
+REGISTRY="$CLAUDECORD_HOME/registry.tsv"
+ORCHESTRATOR="${CLAUDECORD_ORCHESTRATOR:-orchestrator}"
+
+if [ -z "$NAME" ]; then
+  echo "Usage: kill_teammate <name>"
+  exit 1
+fi
+
+if [ "$NAME" = "$ORCHESTRATOR" ]; then
+  echo "ERROR: Cannot kill the orchestrator agent. Use 'tmux kill-session -t $SESSION' to shut everything down."
+  exit 1
+fi
+
+ENTRY=$(grep "^$NAME|.*|alive" "$REGISTRY" 2>/dev/null | tail -1)
+if [ -z "$ENTRY" ]; then
+  echo "ERROR: teammate '$NAME' not found or not alive"
+  exit 1
+fi
+
+# Registry format: name|window|pane|status|dir|spawned
+WINDOW=$(echo "$ENTRY" | cut -d'|' -f2)
+PANE_INDEX=$(echo "$ENTRY" | cut -d'|' -f3)
+
+# Kill the pane
+tmux kill-pane -t "$SESSION:$WINDOW.$PANE_INDEX" 2>/dev/null || true
+
+# Mark dead in registry
+sed -i '' "s/^$NAME|$WINDOW|$PANE_INDEX|alive/$NAME|$WINDOW|$PANE_INDEX|dead/" "$REGISTRY"
+
+echo "Killed $NAME (was pane $WINDOW.$PANE_INDEX)"

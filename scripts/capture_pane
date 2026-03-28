@@ -1,0 +1,46 @@
+#!/bin/bash
+# capture_pane — Capture recent output from a teammate's tmux pane
+#
+# Usage:
+#   capture_pane <name>            # Last 50 lines (default)
+#   capture_pane <name> <lines>    # Last N lines
+#   capture_pane <name> all        # Full scrollback
+
+SESSION="${CLAUDECORD_SESSION:-claudecord}"
+CLAUDECORD_HOME="${CLAUDECORD_HOME:-$HOME/claudecord}"
+REGISTRY="$CLAUDECORD_HOME/registry.tsv"
+
+NAME="$1"
+LINES="${2:-50}"
+
+if [ -z "$NAME" ]; then
+  echo "Usage: capture_pane <name> [lines|all]"
+  exit 1
+fi
+
+if [ ! -f "$REGISTRY" ]; then
+  echo "ERROR: No registry at $REGISTRY"
+  exit 1
+fi
+
+# Find window:pane for this agent (registry format: name|window|pane|status|dir|spawned)
+ENTRY=$(grep "^$NAME|" "$REGISTRY" | tail -1)
+if [ -z "$ENTRY" ]; then
+  echo "ERROR: Agent '$NAME' not found in registry"
+  exit 1
+fi
+
+WINDOW=$(echo "$ENTRY" | cut -d'|' -f2)
+PANE=$(echo "$ENTRY" | cut -d'|' -f3)
+
+# Check pane exists in the correct window
+if ! tmux list-panes -t "$SESSION:$WINDOW" -F '#{pane_index}' 2>/dev/null | grep -q "^$PANE$"; then
+  echo "ERROR: Pane $WINDOW.$PANE for '$NAME' no longer exists (agent dead)"
+  exit 1
+fi
+
+if [ "$LINES" = "all" ]; then
+  tmux capture-pane -t "$SESSION:$WINDOW.$PANE" -p -S -
+else
+  tmux capture-pane -t "$SESSION:$WINDOW.$PANE" -p -S "-$LINES"
+fi

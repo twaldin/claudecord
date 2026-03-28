@@ -1,0 +1,80 @@
+#!/bin/bash
+# batch_merge_deploy — Merge approved PRs and optionally deploy
+#
+# Usage: batch_merge_deploy [pr_numbers...]
+#        batch_merge_deploy --approved    (merge all approved PRs)
+#
+# Configure deployment targets via environment variables:
+#   DEPLOY_REPO_DIR  — local path to the project repo (default: $HOME/your-project)
+#   DEPLOY_VPS       — SSH target for deployment (default: user@your-vps)
+#   DEPLOY_VPS_DIR   — path on VPS (default: /var/www/your-project)
+#   DEPLOY_RESTART   — command to restart app on VPS (default: pm2 restart all)
+
+set -e
+
+REPO_DIR="${DEPLOY_REPO_DIR:-$HOME/your-project}"
+VPS="${DEPLOY_VPS:-user@your-vps}"
+VPS_DIR="${DEPLOY_VPS_DIR:-/var/www/your-project}"
+RESTART_CMD="${DEPLOY_RESTART:-pm2 restart all}"
+PR_LIST=()
+
+cd "$REPO_DIR"
+
+if [ "$1" = "--approved" ]; then
+  # Find all approved PRs
+  mapfile -t PR_LIST < <(gh pr list --json number,reviewDecision -q '.[] | select(.reviewDecision == "APPROVED") | .number')
+  if [ ${#PR_LIST[@]} -eq 0 ]; then
+    echo "No approved PRs found."
+    exit 0
+  fi
+  echo "Found ${#PR_LIST[@]} approved PRs: ${PR_LIST[*]}"
+else
+  PR_LIST=("$@")
+fi
+
+if [ ${#PR_LIST[@]} -eq 0 ]; then
+  echo "Usage: batch_merge_deploy [pr_numbers...] or --approved"
+  exit 1
+fi
+
+# Merge each PR
+MERGED=()
+for PR in "${PR_LIST[@]}"; do
+  echo "Merging PR #$PR..."
+  if gh pr merge "$PR" --squash --delete-branch 2>/dev/null; then
+    MERGED+=("$PR")
+    echo "  Merged #$PR"
+  else
+    echo "  FAILED to merge #$PR — skipping"
+  fi
+done
+
+if [ ${#MERGED[@]} -eq 0 ]; then
+  echo "No PRs were merged. Aborting deploy."
+  exit 1
+fi
+
+echo ""
+echo "Merged ${#MERGED[@]} PRs: ${MERGED[*]}"
+
+# Only deploy if VPS is configured
+if [ "$VPS" = "user@your-vps" ]; then
+  echo "DEPLOY_VPS not configured — skipping remote deploy."
+  echo "Set DEPLOY_VPS, DEPLOY_VPS_DIR, and DEPLOY_RESTART to enable."
+  exit 0
+fi
+
+echo "Deploying to $VPS:$VPS_DIR..."
+
+ssh -o ConnectTimeout=10 "$VPS" bash -s -- "$VPS_DIR" "$RESTART_CMD" <<'DEPLOY'
+VPS_DIR="$1"
+RESTART_CMD="$2"
+cd "$VPS_DIR"
+git pull origin main
+npm install
+$RESTART_CMD
+echo "Deploy complete."
+DEPLOY
+
+echo ""
+echo "Deploy complete. Merged PRs: ${MERGED[*]}"

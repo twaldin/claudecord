@@ -1,0 +1,42 @@
+#!/bin/bash
+# list_teammates — Show status of all registered agents
+# Usage: list_teammates
+
+SESSION="${CLAUDECORD_SESSION:-claudecord}"
+CLAUDECORD_HOME="${CLAUDECORD_HOME:-$HOME/claudecord}"
+REGISTRY="$CLAUDECORD_HOME/registry.tsv"
+
+if [ ! -f "$REGISTRY" ]; then
+  echo "No registry found at $REGISTRY"
+  exit 1
+fi
+
+echo "=== Claudecord Agent Team ==="
+echo ""
+printf "%-15s %-8s %-8s %-40s %s\n" "NAME" "WIN.PANE" "STATUS" "DIRECTORY" "SPAWNED"
+printf "%-15s %-8s %-8s %-40s %s\n" "----" "--------" "------" "---------" "-------"
+
+while IFS='|' read -r name win pane status dir spawned; do
+  # Skip header
+  [[ "$name" == \#* ]] && continue
+  [ -z "$name" ] && continue
+
+  # Check if pane is actually alive (verify window:pane exists AND has a claude process)
+  ACTUAL_STATUS="$status"
+  if [ "$status" = "alive" ]; then
+    if ! tmux list-panes -t "$SESSION:$win" -F '#{pane_index}' 2>/dev/null | grep -q "^$pane$"; then
+      ACTUAL_STATUS="DEAD"
+    else
+      # Check if claude is actually running in this pane
+      PANE_PID=$(tmux display-message -t "$SESSION:$win.$pane" -p '#{pane_pid}' 2>/dev/null)
+      if [ -n "$PANE_PID" ] && ! pgrep -P "$PANE_PID" -f "claude" >/dev/null 2>&1; then
+        ACTUAL_STATUS="EXITED"
+      fi
+    fi
+  fi
+
+  printf "%-15s %-8s %-8s %-40s %s\n" "$name" "$win.$pane" "$ACTUAL_STATUS" "$dir" "$spawned"
+done < "$REGISTRY"
+
+echo ""
+echo "Total panes: $(tmux list-panes -t "$SESSION" 2>/dev/null | wc -l | tr -d ' ')"
