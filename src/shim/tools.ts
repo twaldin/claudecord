@@ -26,7 +26,7 @@ export function formatChannelMessage(msg: ChannelMessage): {
 
 export const REPLY_TOOL = {
   name: 'claudecord_reply',
-  description: 'Send a reply to a Discord channel via the Claudecord daemon.',
+  description: 'Send a reply to a Discord channel via the Claudecord daemon. Provide text, embed, or both.',
   inputSchema: {
     type: 'object' as const,
     properties: {
@@ -36,13 +36,37 @@ export const REPLY_TOOL = {
       },
       text: {
         type: 'string' as const,
-        description: 'The message text to send.',
+        description: 'The message text to send. Optional if embed is provided.',
+      },
+      embed: {
+        type: 'object' as const,
+        description: 'Optional rich embed to include in the reply.',
+        properties: {
+          title: { type: 'string' as const },
+          description: { type: 'string' as const },
+          color: { type: 'number' as const },
+          fields: {
+            type: 'array' as const,
+            items: {
+              type: 'object' as const,
+              properties: {
+                name: { type: 'string' as const },
+                value: { type: 'string' as const },
+                inline: { type: 'boolean' as const },
+              },
+              required: ['name', 'value'] as const,
+            },
+          },
+          footer: { type: 'string' as const },
+          url: { type: 'string' as const },
+          thumbnailUrl: { type: 'string' as const },
+        },
       },
       reply_to: {
         type: 'string' as const,
         description: 'Optional message ID to reply to.',
       },
     },
-    required: ['chat_id', 'text'] as const,
+    required: ['chat_id'] as const,
   },
 }
