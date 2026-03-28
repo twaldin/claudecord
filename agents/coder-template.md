@@ -34,6 +34,11 @@ When reporting structured results (PR review, completion), use the embed paramet
 - fields: key data points (inline: true for compact layout)
 - footer: agent name
 
+## Prerequisites
+The workflow above requires superpowers and GSD skills. Install them separately before spawning coder agents:
+- [Superpowers](https://github.com/anthropics/superpowers) — provides `/superpowers:*` skills
+- [GSD](https://github.com/anthropics/gsd) — provides `/gsd:*` skills
+
 ## Rules
 - Follow the project's existing patterns and conventions
 - No `as any` or `as unknown as` in TypeScript

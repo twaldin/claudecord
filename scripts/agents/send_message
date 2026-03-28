@@ -8,6 +8,8 @@
 
 set -e
 
+sed_inplace() { if [[ "$OSTYPE" == "darwin"* ]]; then sed -i '' "$@"; else sed -i "$@"; fi; }
+
 NAME="$1"
 shift
 MESSAGE="$*"
@@ -34,7 +36,7 @@ PANE_INDEX=$(echo "$ENTRY" | cut -d'|' -f3)
 # Verify pane still exists in the correct window
 if ! tmux list-panes -t "$SESSION:$WINDOW" -F '#{pane_index}' 2>/dev/null | grep -q "^$PANE_INDEX$"; then
   echo "ERROR: pane $WINDOW.$PANE_INDEX for '$NAME' is dead"
-  sed -i '' "s/^$NAME|$WINDOW|$PANE_INDEX|alive/$NAME|$WINDOW|$PANE_INDEX|dead/" "$REGISTRY"
+  sed_inplace "s/^$NAME|$WINDOW|$PANE_INDEX|alive/$NAME|$WINDOW|$PANE_INDEX|dead/" "$REGISTRY"
   exit 1
 fi
 

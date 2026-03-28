@@ -2,10 +2,10 @@
 # setup-vps.sh — One-shot Claudecord VPS setup (Ubuntu/Debian)
 #
 # Run as root on a fresh VPS:
-#   curl -fsSL https://raw.githubusercontent.com/twaldin/claudecord/main/deploy/setup-vps.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/USERNAME/claudecord/main/deploy/setup-vps.sh | bash
 #
 # Or clone and run:
-#   git clone https://github.com/twaldin/claudecord
+#   git clone https://github.com/USERNAME/claudecord
 #   cd claudecord && sudo bash deploy/setup-vps.sh
 
 set -e
@@ -56,7 +56,7 @@ if [ -d "$APP_DIR/.git" ]; then
   echo "Repo exists — pulling latest..."
   sudo -u "$APP_USER" git -C "$APP_DIR" pull origin main
 else
-  sudo -u "$APP_USER" git clone https://github.com/twaldin/claudecord "$APP_DIR"
+  sudo -u "$APP_USER" git clone https://github.com/USERNAME/claudecord "$APP_DIR"
 fi
 
 # Install dependencies

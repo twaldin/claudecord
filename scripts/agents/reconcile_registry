@@ -8,6 +8,8 @@
 #   Without --fix: report only (dry run)
 #   With --fix: update registry to match reality
 
+sed_inplace() { if [[ "$OSTYPE" == "darwin"* ]]; then sed -i '' "$@"; else sed -i "$@"; fi; }
+
 SESSION="${CLAUDECORD_SESSION:-claudecord}"
 CLAUDECORD_HOME="${CLAUDECORD_HOME:-$HOME/claudecord}"
 REGISTRY="$CLAUDECORD_HOME/registry.tsv"
@@ -38,7 +40,7 @@ while IFS='|' read -r name win pane status dir spawned; do
     if ! tmux list-panes -t "$SESSION:$win" -F '#{pane_index}' 2>/dev/null | grep -q "^$pane$"; then
       echo "STALE: $name registered as alive at $win.$pane but pane is gone"
       if [ "$FIX" = "--fix" ]; then
-        sed -i '' "s/^$name|$win|$pane|alive/$name|$win|$pane|dead/" "$REGISTRY"
+        sed_inplace "s/^$name|$win|$pane|alive/$name|$win|$pane|dead/" "$REGISTRY"
         echo "  → marked dead"
       fi
       CHANGES=$((CHANGES + 1))
