@@ -10,13 +10,9 @@ const API_SECRET = process.env['CLAUDECORD_API_SECRET']
 const POLL_INTERVAL_MS = 2000
 
 async function daemonFetch(path: string, init?: RequestInit): Promise<Response | null> {
-  const headers: Record<string, string> = {
-    ...(init?.headers as Record<string, string> | undefined),
-  }
-  if (API_SECRET) {
-    headers['Authorization'] = `Bearer ${API_SECRET}`
-  }
   try {
+    const headers: Record<string, string> = { ...(init?.headers as Record<string, string> | undefined) }
+    if (API_SECRET) { headers['Authorization'] = `Bearer ${API_SECRET}` }
     return await fetch(`${DAEMON_URL}${path}`, { ...init, headers })
   } catch {
     // Daemon unreachable — silent retry next poll
@@ -77,18 +73,36 @@ async function main() {
   )
 
   // Register the reply tool
+  const embedFieldSchema = z.object({
+    name: z.string(),
+    value: z.string(),
+    inline: z.boolean().optional(),
+  })
+
+  const embedSchema = z.object({
+    title: z.string().optional(),
+    description: z.string().optional(),
+    color: z.number().optional(),
+    fields: z.array(embedFieldSchema).optional(),
+    footer: z.string().optional(),
+    url: z.string().optional(),
+    thumbnailUrl: z.string().optional(),
+  }).optional()
+
   server.tool(
     'claudecord_reply',
-    'Send a reply to a Discord channel via the Claudecord daemon.',
+    'Send a reply to a Discord channel via the Claudecord daemon. Provide text, embed, or both.',
     {
       chat_id: z.string().describe('The Discord channel ID to send the reply to.'),
-      text: z.string().describe('The message text to send.'),
+      text: z.string().optional().describe('The message text to send. Optional if embed is provided.'),
+      embed: embedSchema.describe('Optional rich embed to include in the reply.'),
       reply_to: z.string().optional().describe('Optional message ID to reply to.'),
     },
-    async ({ chat_id, text, reply_to }) => {
+    async ({ chat_id, text, embed, reply_to }) => {
       const success = await sendReply({
         channelId: chat_id,
         text,
+        embed,
         replyTo: reply_to,
       })
 
