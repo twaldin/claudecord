@@ -1,8 +1,16 @@
 import { writeFileSync, readFileSync, renameSync, existsSync } from 'fs'
 import { ChannelType, type EmbedBuilder } from 'discord.js'
 import type { AgentType, AgentChannelMeta, CleanupEmbedData, RoutingConfig } from '../shared/types.js'
+import type { AgentLifecycle } from '../shared/agent-lifecycle.js'
 import { buildSpawnEmbed, buildCleanupEmbed } from './embeds.js'
 import { addAgentChannel } from './routing.js'
+
+const AGENT_TYPE_LIFECYCLE: Record<AgentType, AgentLifecycle> = {
+  persistent: 'persistent',
+  coder: 'ephemeral',
+  researcher: 'ephemeral',
+  evaluator: 'ephemeral',
+}
 
 export interface ChannelLifecycle {
   channelId: string
@@ -82,6 +90,9 @@ export function createChannelManager(deps: ChannelManagerDeps): ChannelManager {
   }
 
   async function createAgentChannel(agentName: string, agentType: AgentType, task: string): Promise<string> {
+    if (AGENT_TYPE_LIFECYCLE[agentType] === 'persistent') {
+      throw new Error(`Cannot create channel for persistent agent '${agentName}' — use pre-configured channels`)
+    }
     const guild = getGuild()
     const channel = await guild.channels.create({ name: agentName, type: ChannelType.GuildText })
 
