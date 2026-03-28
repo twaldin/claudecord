@@ -1,0 +1,28 @@
+[
+  {
+    "channelId": "1234567890123456789",
+    "agentName": "coder-fix-49",
+    "agentType": "coder",
+    "status": "active",
+    "spawnedAt": "2026-03-28T10:00:00.000Z"
+  },
+  {
+    "channelId": "9876543210987654321",
+    "agentName": "evaluator-pr-52",
+    "agentType": "evaluator",
+    "status": "archived",
+    "spawnedAt": "2026-03-27T14:30:00.000Z",
+    "diedAt": "2026-03-27T17:12:00.000Z",
+    "cleanupMessageId": "1111222233334444555"
+  },
+  {
+    "channelId": "5555666677778888999",
+    "agentName": "researcher-spacex",
+    "agentType": "researcher",
+    "status": "pending-cleanup",
+    "spawnedAt": "2026-03-26T09:00:00.000Z",
+    "diedAt": "2026-03-26T11:45:00.000Z",
+    "cleanupMessageId": "9999888877776666555",
+    "scheduledDeleteAt": "2026-03-27T11:45:00.000Z"
+  }
+]
