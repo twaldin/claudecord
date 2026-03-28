@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+"""
+weekly_review — Generate a weekly progress report.
+
+Usage: weekly_review [--tasks <path>] [--habits <path>] [--heartbeat-log <path>]
+
+Outputs a formatted weekly review covering:
+- Habit completion rate
+- Task throughput (completed vs added this week)
+- Notable wins (P0/P1 tasks completed)
+- Misses (tasks that were due this week but not done)
+- Agent reliability (from heartbeat.log)
+"""
+
+import sys
+import os
+import re
+import argparse
+from datetime import date, timedelta
+from pathlib import Path
+
+DEFAULT_TASKS_FILE = os.path.expanduser("~/memory/tasks.md")
+DEFAULT_HABITS_FILE = os.path.expanduser("~/memory/habits.md")
+DEFAULT_HEARTBEAT_LOG = os.path.expanduser("~/heartbeat.log")
+
+DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+DONE_MARKERS = {"✅", "x", "X", "done", "yes", "1", "✓"}
+
+
+def get_week_bounds():
+    today = date.today()
+    week_start = today - timedelta(days=today.weekday())  # Monday
+    week_end = week_start + timedelta(days=6)
+    return week_start, week_end
+
+
+def parse_habits(path):
+    """Return (habits_tracked, days_marked_this_week) for current week."""
+    if not Path(path).exists():
+        return [], 0
+    text = Path(path).read_text()
+    habits = {}
+    in_table = False
+    header_found = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("|"):
+            cols = [c.strip() for c in stripped.split("|")[1:-1]]
+            if not header_found:
+                header_found = True
+                in_table = True
+                continue
+            if set(cols[0]) <= set("-: "):
+                continue
+            if in_table and cols[0]:
+                habits[cols[0]] = [c in DONE_MARKERS for c in cols[1:] if c != ""]
+        else:
+            if in_table:
+                in_table = False
+                header_found = False
+    return habits
+
+
+def parse_tasks(path):
+    """Return (completed_this_week, added_this_week, overdue_undone)."""
+    if not Path(path).exists():
+        return [], [], []
+    text = Path(path).read_text()
+    completed = []
+    added = []
+    overdue_undone = []
+    week_start, week_end = get_week_bounds()
+    today = date.today()
+
+    for line in text.splitlines():
+        if not line.startswith("|") or line.startswith("| Task"):
+            continue
+        parts = [p.strip() for p in line.split("|")[1:-1]]
+        if len(parts) < 5:
+            continue
+        task, status, priority, assigned, due = parts[0], parts[1], parts[2], parts[3], parts[4]
+        source = parts[5] if len(parts) > 5 else ""
+
+        # Check if completed this week (look for date in source column)
+        if status == "done":
+            date_match = re.search(r"\d{4}-\d{2}-\d{2}", source)
+            if date_match:
+                try:
+                    done_date = date.fromisoformat(date_match.group())
+                    if week_start <= done_date <= week_end:
+                        completed.append({"task": task, "priority": priority})
+                except ValueError:
+                    pass
+
+        # Added this week (assigned date in assigned column)
+        date_match = re.search(r"\d{4}-\d{2}-\d{2}", assigned)
+        if date_match:
+            try:
+                add_date = date.fromisoformat(date_match.group())
+                if week_start <= add_date <= week_end:
+                    added.append(task)
+            except ValueError:
+                pass
+
+        # Overdue and undone
+        if status != "done":
+            date_match = re.search(r"\d{4}-\d{2}-\d{2}", due)
+            if date_match:
+                try:
+                    due_date = date.fromisoformat(date_match.group())
+                    if due_date < today:
+                        overdue_undone.append({"task": task, "due": due_date, "priority": priority})
+                except ValueError:
+                    pass
+
+    return completed, added, overdue_undone
+
+
+def parse_heartbeat_log(path):
+    """Count agent respawn events this week."""
+    if not Path(path).exists():
+        return 0, 0
+    week_start, _ = get_week_bounds()
+    respawns = 0
+    total_heartbeats = 0
+    for line in Path(path).read_text().splitlines():
+        date_match = re.match(r"(\d{4}-\d{2}-\d{2})", line)
+        if date_match:
+            try:
+                log_date = date.fromisoformat(date_match.group(1))
+                if log_date >= week_start:
+                    total_heartbeats += 1
+                    if "respawned" in line.lower():
+                        respawns += 1
+            except ValueError:
+                pass
+    return total_heartbeats, respawns
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Generate weekly review")
+    parser.add_argument("--tasks", default=DEFAULT_TASKS_FILE)
+    parser.add_argument("--habits", default=DEFAULT_HABITS_FILE)
+    parser.add_argument("--heartbeat-log", default=DEFAULT_HEARTBEAT_LOG)
+    args = parser.parse_args()
+
+    week_start, week_end = get_week_bounds()
+    today = date.today()
+    days_elapsed = today.weekday() + 1  # 1 = Monday, 7 = Sunday
+
+    print(f"**Weekly Review — Week of {week_start.strftime('%Y-%m-%d')}**")
+    print(f"Generated: {today.strftime('%A, %Y-%m-%d')}")
+    print()
+
+    # Habits
+    habits = parse_habits(args.habits)
+    if habits:
+        print("**Habits:**")
+        total_possible = days_elapsed * len(habits)
+        total_done = sum(sum(1 for v in days[:days_elapsed] if v) for days in habits.values())
+        pct = int(100 * total_done / total_possible) if total_possible > 0 else 0
+        print(f"  Completion rate: {total_done}/{total_possible} ({pct}%)")
+        for name, days in habits.items():
+            marked = sum(1 for v in days[:days_elapsed] if v)
+            print(f"  {name}: {marked}/{days_elapsed} days")
+        print()
+
+    # Tasks
+    completed, added, overdue = parse_tasks(args.tasks)
+    print("**Tasks:**")
+    print(f"  Completed this week: {len(completed)}")
+    for t in completed:
+        print(f"    ✅ [{t['priority']}] {t['task']}")
+    print(f"  Added this week: {len(added)}")
+    if overdue:
+        print(f"  Overdue (not done): {len(overdue)}")
+        for t in overdue:
+            print(f"    ⚠️ [{t['priority']}] {t['task']} (was due {t['due']})")
+    print()
+
+    # Agents
+    heartbeats, respawns = parse_heartbeat_log(args.heartbeat_log)
+    print("**Agent Reliability:**")
+    print(f"  Heartbeats run: {heartbeats}")
+    print(f"  Agent respawns: {respawns}")
+    if respawns > 3:
+        print(f"  ⚠️ High respawn count — investigate agent stability")
+    print()
+
+    # Summary
+    print("**Summary:**")
+    wins = [t["task"] for t in completed if t["priority"] in ("P0", "P1")]
+    if wins:
+        print("  Wins: " + ", ".join(wins))
+    misses = [t["task"] for t in overdue if t["priority"] in ("P0", "P1")]
+    if misses:
+        print("  Misses: " + ", ".join(misses))
+    if not wins and not misses:
+        print("  (no P0/P1 activity this week)")
+
+
+if __name__ == "__main__":
+    main()
