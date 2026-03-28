@@ -14,9 +14,15 @@
 
 set -e
 
+# Source .env for API secret (needed for daemon curl calls)
+CLAUDECORD_HOME="${CLAUDECORD_HOME:-$HOME/claudecord}"
+if [ -f "$CLAUDECORD_HOME/.env" ]; then
+  set -a; source "$CLAUDECORD_HOME/.env"; set +a
+fi
+
 NAME="$1"
 SESSION="claudecord"
-REGISTRY="$HOME/claudecord/registry.tsv"
+REGISTRY="$CLAUDECORD_HOME/registry.tsv"
 MODEL="sonnet"  # default
 
 # Parse args
