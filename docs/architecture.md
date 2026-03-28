@@ -265,7 +265,7 @@ If `DISCORD_ALLOWED_USERS` is empty, no restriction is applied (suitable for pri
 
 | Variable                       | Required | Description |
 |--------------------------------|----------|-------------|
-| `DISCORD_TOKEN`                | Yes      | Bot token from Discord Developer Portal |
+| `DISCORD_BOT_TOKEN`            | Yes      | Bot token from Discord Developer Portal |
 | `ANTHROPIC_API_KEY`            | Yes      | Anthropic API key for Claude sessions |
 | `DISCORD_GUILD_ID`             | Yes*     | Server ID; required to enable channel manager |
 | `DISCORD_STATUS_CHANNEL_ID`    | No       | Channel for the auto-updating status board |

@@ -64,10 +64,16 @@ bash scripts/setup.sh
 ### 4. Start
 
 ```bash
-npm run daemon
+bash scripts/start.sh
 ```
 
-This starts the Express HTTP API and the Discord bot. Agents are spawned separately via `scripts/agents/spawn_teammate`.
+This starts the daemon and bootstraps the orchestrator in a tmux session.
+
+Alternatively, for daemon-only mode (without agent orchestration):
+
+```bash
+npm run daemon
+```
 
 ## Documentation
 

@@ -17,7 +17,7 @@
   },
   {
     "channelId": "5555666677778888999",
-    "agentName": "researcher-spacex",
+    "agentName": "researcher-docs-review",
     "agentType": "researcher",
     "status": "pending-cleanup",
     "spawnedAt": "2026-03-26T09:00:00.000Z",

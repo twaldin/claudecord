@@ -165,7 +165,7 @@ async function main() {
 
   // Wire slash command interaction handler
   const statsFilePath = resolve(homedir(), '.claudecord-stats.json')
-  const tasksFilePath = process.env['TASKS_PATH'] ?? resolve(homedir(), '.lifeos/memory/tasks.md')
+  const tasksFilePath = process.env['TASKS_PATH'] ?? resolve(homedir(), 'claudecord/memory/tasks.md')
   const allowedUserIds = process.env['DISCORD_ALLOWED_USERS']
     ?.split(',').map(s => s.trim()).filter(Boolean) ?? []
 
