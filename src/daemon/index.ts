@@ -3,7 +3,7 @@ import { homedir } from 'os'
 import { writeFileSync, existsSync, readFileSync, unlinkSync } from 'fs'
 import { config } from 'dotenv'
 import { createDiscordClient } from './discord.js'
-import { createHttpApi } from './http-api.js'
+import { createHttpApi, persistState } from './http-api.js'
 import { loadRouting, resolveAgent } from './routing.js'
 import { createChannelManager, type ChannelManagerDeps, type ChannelManager } from './channel-manager.js'
 import { createStatusBoard } from './status-board.js'
@@ -67,6 +67,13 @@ async function main() {
   let routingConfig = loadRouting(routingPath)
   console.log(`[daemon] Loaded routing: ${Object.keys(routingConfig.agents).join(', ')}`)
 
+  const agentStatePath = resolve(homedir(), '.claudecord-agent-state.json')
+  type MinimalEntry = { name: string; status: 'alive' | 'dead'; spawnedAt: string; diedAt: string | null }
+  const agentState: { schemaVersion: 1; agents: Record<string, MinimalEntry> } = {
+    schemaVersion: 1,
+    agents: {},
+  }
+
   const guildId = process.env['DISCORD_GUILD_ID']
   const codeStatusChannelId = process.env['DISCORD_CODE_STATUS_CHANNEL_ID']
   const channelStatePath = resolve(homedir(), '.claudecord-channels.json')
@@ -108,11 +115,22 @@ async function main() {
       }
     },
     onAgentSpawn: async (data) => {
+      agentState.agents[data.agentName] = {
+        name: data.agentName,
+        status: 'alive',
+        spawnedAt: new Date().toISOString(),
+        diedAt: null,
+      }
       if (!channelManager) return { channelId: '' }
       const channelId = await channelManager.createAgentChannel(data.agentName, data.agentType, data.task)
       return { channelId }
     },
     onAgentDied: async ({ agentName }) => {
+      const stateEntry = agentState.agents[agentName]
+      if (stateEntry) {
+        stateEntry.status = 'dead'
+        stateEntry.diedAt = new Date().toISOString()
+      }
       if (!channelManager) return
       const entry = channelManager.getState().find(e => e.agentName === agentName && e.status === 'active')
       if (!entry) return
@@ -255,6 +273,12 @@ async function main() {
   // Graceful shutdown
   const shutdown = async () => {
     console.log('[daemon] Shutting down...')
+    if (agentStatePath && agentState) {
+      try {
+        persistState(agentState, agentStatePath)
+        console.log('[daemon] Agent state persisted')
+      } catch {}
+    }
     removePid()
     server.close()
     await discord.destroy()

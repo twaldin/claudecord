@@ -166,6 +166,15 @@ async function main() {
   }
 
   setInterval(() => void poll(), POLL_INTERVAL_MS)
+
+  // Periodic re-registration so the shim reconnects after daemon restarts
+  setInterval(() => {
+    void daemonFetch('/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentName: AGENT_NAME }),
+    })
+  }, 30000)
 }
 
 main().catch((err) => {

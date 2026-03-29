@@ -1,5 +1,22 @@
 import express, { type Request, type Response } from 'express'
+import { writeFileSync, renameSync } from 'fs'
 import type { ChannelMessage, AgentReply, AgentSpawnBody, WorkCompletedBody, AgentHeartbeatBody, AgentType } from '../shared/types.js'
+
+let writeQueue: Promise<void> = Promise.resolve()
+
+export function persistState(data: unknown, filePath: string): void {
+  writeQueue = writeQueue.then(() => {
+    const tmp = filePath + '.tmp'
+    writeFileSync(tmp, JSON.stringify(data, null, 2))
+    renameSync(tmp, filePath)
+  }).catch((err: unknown) => {
+    console.error('[daemon] Failed to persist state:', err instanceof Error ? err.message : err)
+  })
+}
+
+export function flushWrites(): Promise<void> {
+  return writeQueue
+}
 
 export interface HttpApiDeps {
   onReply: (reply: AgentReply) => Promise<void>
@@ -86,6 +103,11 @@ export function createHttpApi(deps: HttpApiDeps) {
       agents: Array.from(registeredAgents),
       uptime: process.uptime(),
     })
+  })
+
+  app.get('/agents', (_req: Request, res: Response) => {
+    const agents = Array.from(registeredAgents).map(name => ({ name }))
+    res.json({ agents })
   })
 
   app.post('/agent/spawn', (req: Request, res: Response) => {
