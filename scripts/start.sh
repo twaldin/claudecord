@@ -1,8 +1,8 @@
 #!/bin/bash
 # start.sh — Bootstrap the Claudecord agent team
 # 1. Starts the daemon (Discord connection + HTTP API)
-# 2. Creates tmux session with orchestrator in pane 0
-# Orchestrator then spawns other agents as needed
+# 2. Creates tmux session with orchestrator in its own named window
+# Orchestrator then spawns other agents as needed via spawn_teammate
 
 set -e
 
@@ -30,9 +30,9 @@ if tmux has-session -t "$SESSION" 2>/dev/null; then
   tmux kill-session -t "$SESSION"
 fi
 
-# Clear registry
+# Clear registry (format: name|status|directory|spawned_at)
 mkdir -p "$CLAUDECORD_HOME"
-echo "# name|window|pane|status|directory|spawned_at" > "$REGISTRY"
+echo "# name|status|directory|spawned_at" > "$REGISTRY"
 
 # Start daemon
 echo "Starting daemon on port $DAEMON_PORT..."
@@ -59,16 +59,16 @@ if ! kill -0 "$DAEMON_PID" 2>/dev/null; then
   exit 1
 fi
 
-# Create tmux session with orchestrator in pane 0
-tmux new-session -d -s "$SESSION" -c "$ORCHESTRATOR_DIR" \
-  "export PATH=\"$CLAUDECORD_HOME/scripts/agents:$CLAUDECORD_HOME/scripts/tools:\$PATH\"; claude --dangerously-skip-permissions"
+# Create tmux session with orchestrator in its own named window
+tmux new-session -d -s "$SESSION" -n "orchestrator" -c "$ORCHESTRATOR_DIR" \
+  "export CLAUDECORD_AGENT_NAME=orchestrator; export PATH=\"$CLAUDECORD_HOME/scripts/agents:$CLAUDECORD_HOME/scripts/tools:\$PATH\"; claude --dangerously-skip-permissions"
 
-# Register orchestrator
-echo "orchestrator|0|0|alive|$ORCHESTRATOR_DIR|$(date -Iseconds)" >> "$REGISTRY"
+# Register orchestrator (format: name|status|directory|spawned_at)
+echo "orchestrator|alive|$ORCHESTRATOR_DIR|$(date -Iseconds)" >> "$REGISTRY"
 
 echo ""
 echo "=== Claudecord Started ==="
 echo "Daemon: PID $DAEMON_PID on port $DAEMON_PORT"
-echo "Orchestrator: tmux pane 0"
+echo "Orchestrator: tmux window 'orchestrator'"
 echo "Attach: tmux attach -t $SESSION"
 echo "Registry: $REGISTRY"

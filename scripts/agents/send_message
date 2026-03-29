@@ -22,21 +22,17 @@ if [ -z "$NAME" ] || [ -z "$MESSAGE" ]; then
   exit 1
 fi
 
-# Look up pane from registry
-ENTRY=$(grep "^$NAME|.*|alive" "$REGISTRY" 2>/dev/null | tail -1)
+# Look up agent from registry (format: name|status|dir|spawned)
+ENTRY=$(grep "^$NAME|alive|" "$REGISTRY" 2>/dev/null | tail -1)
 if [ -z "$ENTRY" ]; then
   echo "ERROR: teammate '$NAME' not found or not alive"
   exit 1
 fi
 
-# Registry format: name|window|pane|status|dir|spawned
-WINDOW=$(echo "$ENTRY" | cut -d'|' -f2)
-PANE_INDEX=$(echo "$ENTRY" | cut -d'|' -f3)
-
-# Verify pane still exists in the correct window
-if ! tmux list-panes -t "$SESSION:$WINDOW" -F '#{pane_index}' 2>/dev/null | grep -q "^$PANE_INDEX$"; then
-  echo "ERROR: pane $WINDOW.$PANE_INDEX for '$NAME' is dead"
-  sed_inplace "s/^$NAME|$WINDOW|$PANE_INDEX|alive/$NAME|$WINDOW|$PANE_INDEX|dead/" "$REGISTRY"
+# Verify window still exists
+if ! tmux list-windows -t "$SESSION" -F '#{window_name}' 2>/dev/null | grep -q "^$NAME$"; then
+  echo "ERROR: window '$NAME' is dead"
+  sed_inplace "s/^$NAME|alive|/$NAME|dead|/" "$REGISTRY"
   exit 1
 fi
 
@@ -47,8 +43,8 @@ SENDER_UPPER=$(echo "$SENDER" | tr '[:lower:]' '[:upper:]')
 # Send message via tmux send-keys with envelope to prevent prompt injection
 # -l flag sends literal text (no key binding interpretation)
 ENVELOPE="[$SENDER_UPPER]: $MESSAGE"
-tmux send-keys -t "$SESSION:$WINDOW.$PANE_INDEX" -l "$ENVELOPE"
+tmux send-keys -t "$SESSION:$NAME" -l "$ENVELOPE"
 sleep 1
-tmux send-keys -t "$SESSION:$WINDOW.$PANE_INDEX" Enter
+tmux send-keys -t "$SESSION:$NAME" Enter
 
-echo "Sent to $NAME (pane $WINDOW.$PANE_INDEX)"
+echo "Sent to $NAME"
