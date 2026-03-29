@@ -3,7 +3,6 @@ import { ChannelType, type EmbedBuilder } from 'discord.js'
 import type { AgentType, AgentChannelMeta, CleanupEmbedData, RoutingConfig } from '../shared/types.js'
 import type { AgentLifecycle } from '../shared/agent-lifecycle.js'
 import { buildSpawnEmbed, buildCleanupEmbed } from './embeds.js'
-import { addAgentChannel } from './routing.js'
 
 const AGENT_TYPE_LIFECYCLE: Record<AgentType, AgentLifecycle> = {
   persistent: 'persistent',

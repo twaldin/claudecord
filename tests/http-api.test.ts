@@ -686,3 +686,20 @@ describe('POST /agent/heartbeat — updates registry entry', () => {
     expect(entry?.lastHeartbeatAt! >= before).toBe(true)
   })
 })
+
+describe('POST /agent/spawn — agentName injection validation', () => {
+  const injectionNames = ['bad;rm -rf /', 'a|b', 'x`whoami`', '$HOME', 'UPPER', 'has space', 'a'.repeat(81)]
+
+  for (const name of injectionNames) {
+    it(`rejects agentName ${JSON.stringify(name)}`, async () => {
+      const res = await fetch(url('/agent/spawn'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentName: name, agentType: 'coder', task: 'test' }),
+      })
+      expect(res.status).toBe(400)
+      const data = await res.json() as { error: string }
+      expect(data.error).toMatch(/agentName/)
+    })
+  }
+})
