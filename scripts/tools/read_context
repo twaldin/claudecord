@@ -1,0 +1,53 @@
+#!/bin/bash
+# read_context — Read context % from agent tmux panes
+# Usage: read_context [agent_name]  — specific agent
+#        read_context --all         — all agents
+#        read_context --self        — this session (lifeos)
+
+SESSION="claudecord"
+REGISTRY="${CLAUDECORD_HOME:-$HOME/claudecord}/registry.tsv"
+
+read_pane_context() {
+  local session="$1" win="$2" pane="$3"
+  local line
+  line=$(tmux capture-pane -t "$session:$win.$pane" -p 2>/dev/null | grep "●\|○" | tail -1)
+  if [ -z "$line" ]; then
+    echo "?"
+    return
+  fi
+  local pct
+  pct=$(echo "$line" | grep -oE '[0-9]+%' | head -1)
+  echo "${pct:-?}"
+}
+
+if [ "$1" = "--self" ]; then
+  # Read our own context (lifeos session)
+  pct=$(tmux capture-pane -t lifeos:1.1 -p 2>/dev/null | grep "●\|○" | tail -1 | grep -oE '[0-9]+%' | head -1)
+  echo "orchestrator: ${pct:-?}"
+elif [ "$1" = "--all" ]; then
+  # Read orchestrator
+  pct=$(tmux capture-pane -t lifeos:1.1 -p 2>/dev/null | grep "●\|○" | tail -1 | grep -oE '[0-9]+%' | head -1)
+  printf "%-20s %s\n" "orchestrator" "${pct:-?}"
+
+  # Read all registered agents
+  while IFS='|' read -r name win pane status dir spawned; do
+    [[ "$name" == \#* ]] && continue
+    [ -z "$name" ] && continue
+    [ "$status" != "alive" ] && continue
+    pct=$(read_pane_context "$SESSION" "$win" "$pane")
+    printf "%-20s %s\n" "$name" "$pct"
+  done < "$REGISTRY"
+elif [ -n "$1" ]; then
+  # Specific agent
+  entry=$(grep "^$1|.*|alive" "$REGISTRY" 2>/dev/null | tail -1)
+  if [ -z "$entry" ]; then
+    echo "Agent '$1' not found or not alive"
+    exit 1
+  fi
+  win=$(echo "$entry" | cut -d'|' -f2)
+  pane=$(echo "$entry" | cut -d'|' -f3)
+  pct=$(read_pane_context "$SESSION" "$win" "$pane")
+  echo "$1: $pct"
+else
+  echo "Usage: read_context --self | --all | <agent_name>"
+fi

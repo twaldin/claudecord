@@ -217,13 +217,15 @@ async function main() {
           lastActivity: now,
         }))
         const channelEntries: AgentStatusEntry[] = channelManager
-          ? channelManager.getState().map(entry => ({
-              name: entry.agentName,
-              type: entry.agentType,
-              status: entry.status === 'active' ? ('working' as const) : ('dead' as const),
-              lastActivity: entry.diedAt ?? entry.spawnedAt,
-              channelId: entry.channelId,
-            }))
+          ? channelManager.getState()
+              .filter(entry => entry.status === 'active')
+              .map(entry => ({
+                name: entry.agentName,
+                type: entry.agentType,
+                status: 'working' as const,
+                lastActivity: entry.spawnedAt,
+                channelId: entry.channelId,
+              }))
           : []
         const seen = new Set<string>()
         const agents: AgentStatusEntry[] = []
