@@ -82,7 +82,17 @@ async function main() {
   const discord = createDiscordClient({
     token: discordToken,
     onMessage: (msg) => {
-      const agentName = resolveAgent(routingConfig, msg.channelId)
+      let agentName = resolveAgent(routingConfig, msg.channelId)
+      // Fallback: check agent registry for ephemeral channel routing
+      if (!agentName) {
+        const registry = api.getAgentRegistry()
+        for (const [name, entry] of registry) {
+          if (entry.channelId === msg.channelId && entry.status === 'alive') {
+            agentName = name
+            break
+          }
+        }
+      }
       if (!agentName) {
         console.log(`[daemon] No agent for channel ${msg.channelId}, dropping message`)
         return
