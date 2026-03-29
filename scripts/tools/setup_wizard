@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+# setup_wizard — Initialize a fresh Claudecord install.
+#
+# Called by the CLAUDE.md setup flow after the user answers the wizard questions.
+# All values are passed as environment variables.
+#
+# Required:
+#   WIZARD_AI_NAME           AI assistant name (e.g. "jarvis")
+#   WIZARD_DISCORD_TOKEN     Discord bot token
+#   WIZARD_ANTHROPIC_KEY     Anthropic API key (sk-ant-...)
+#   WIZARD_GUILD_ID          Discord server (guild) ID
+#   WIZARD_CHANNEL_MAIN      Main channel ID (orchestrator inbox)
+#   WIZARD_CHANNEL_ALERTS    Alerts channel ID
+#   WIZARD_CHANNEL_CODE_STATUS  Code-status channel ID
+#   WIZARD_CHANNEL_STATUS    Status board channel ID
+#
+# Optional:
+#   WIZARD_AGENTS            Comma-separated agent types (default: all)
+#                            Values: coder, evaluator, researcher, reviewer
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CLAUDECORD_HOME="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# ── Validate required vars ────────────────────────────────────────────────────
+
+required_vars=(
+  WIZARD_AI_NAME
+  WIZARD_DISCORD_TOKEN
+  WIZARD_ANTHROPIC_KEY
+  WIZARD_GUILD_ID
+  WIZARD_CHANNEL_MAIN
+  WIZARD_CHANNEL_ALERTS
+  WIZARD_CHANNEL_CODE_STATUS
+  WIZARD_CHANNEL_STATUS
+)
+
+for var in "${required_vars[@]}"; do
+  if [[ -z "${!var:-}" ]]; then
+    echo "ERROR: $var is required but not set." >&2
+    exit 1
+  fi
+done
+
+AI_NAME="${WIZARD_AI_NAME,,}"  # lowercase
+AGENTS="${WIZARD_AGENTS:-all}"
+if [[ "$AGENTS" == "all" || -z "$AGENTS" ]]; then
+  AGENTS="coder,evaluator,researcher,reviewer"
+fi
+
+echo ""
+echo "=== Claudecord Setup ==="
+echo "AI name:   $AI_NAME"
+echo "Agents:    $AGENTS"
+echo ""
+
+# ── Write .env ────────────────────────────────────────────────────────────────
+
+ENV_FILE="$CLAUDECORD_HOME/.env"
+
+if [[ -f "$ENV_FILE" ]]; then
+  echo "Backing up existing .env to .env.bak"
+  cp "$ENV_FILE" "$ENV_FILE.bak"
+fi
+
+cat > "$ENV_FILE" << EOF
+# Discord bot token (from Discord Developer Portal)
+DISCORD_TOKEN=${WIZARD_DISCORD_TOKEN}
+
+# Anthropic API key (for Claude)
+ANTHROPIC_API_KEY=${WIZARD_ANTHROPIC_KEY}
+
+# Discord server (guild) ID
+DISCORD_GUILD_ID=${WIZARD_GUILD_ID}
+
+# Discord channel IDs
+DISCORD_CODE_STATUS_CHANNEL_ID=${WIZARD_CHANNEL_CODE_STATUS}
+DISCORD_STATUS_CHANNEL_ID=${WIZARD_CHANNEL_STATUS}
+
+# Comma-separated Discord user IDs allowed to message the bot (empty = allow all)
+DISCORD_ALLOWED_USERS=
+
+# Shared secret for HTTP API Bearer token auth (empty = no auth)
+CLAUDECORD_API_SECRET=
+
+# Orchestrator home directory
+CLAUDECORD_ORCHESTRATOR_DIR=${HOME}/${AI_NAME}
+EOF
+
+echo "✓ Wrote .env"
+
+# ── Create orchestrator directories ──────────────────────────────────────────
+
+ORCHESTRATOR_DIR="$HOME/$AI_NAME"
+ORCHESTRATOR_CONFIG_DIR="$HOME/.$AI_NAME"
+
+mkdir -p "$ORCHESTRATOR_DIR"
+mkdir -p "$ORCHESTRATOR_CONFIG_DIR"
+echo "✓ Created $ORCHESTRATOR_DIR"
+echo "✓ Created $ORCHESTRATOR_CONFIG_DIR"
+
+# ── Copy orchestrator template ────────────────────────────────────────────────
+
+TEMPLATE_DIR="$CLAUDECORD_HOME/agents/orchestrator"
+
+if [[ ! -d "$TEMPLATE_DIR" ]]; then
+  echo "ERROR: Orchestrator template not found at $TEMPLATE_DIR" >&2
+  exit 1
+fi
+
+# Copy template contents to orchestrator dir (skip if files already exist)
+cp -rn "$TEMPLATE_DIR/." "$ORCHESTRATOR_DIR/" 2>/dev/null || true
+echo "✓ Copied orchestrator template to $ORCHESTRATOR_DIR"
+
+# ── Symlink agents/orchestrator → ~/ainame ───────────────────────────────────
+# start.sh looks for the orchestrator at $CLAUDECORD_HOME/agents/orchestrator.
+# Replace the template directory with a symlink to the user's personalized dir.
+
+AGENTS_ORCH_PATH="$CLAUDECORD_HOME/agents/orchestrator"
+
+if [[ -d "$AGENTS_ORCH_PATH" && ! -L "$AGENTS_ORCH_PATH" ]]; then
+  rm -rf "$AGENTS_ORCH_PATH"
+fi
+
+if [[ ! -L "$AGENTS_ORCH_PATH" ]]; then
+  ln -s "$ORCHESTRATOR_DIR" "$AGENTS_ORCH_PATH"
+  echo "✓ Linked agents/orchestrator → $ORCHESTRATOR_DIR"
+fi
+
+# ── Run setup.sh (fills placeholders in agent CLAUDE.md files) ───────────────
+
+echo ""
+echo "Filling agent templates..."
+
+export SETUP_USER_NAME="$AI_NAME"
+export SETUP_CLAUDECORD_HOME="$CLAUDECORD_HOME"
+export SETUP_CHANNEL_MAIN="$WIZARD_CHANNEL_MAIN"
+export SETUP_CHANNEL_ALERTS="$WIZARD_CHANNEL_ALERTS"
+export SETUP_CHANNEL_DAILY="$WIZARD_CHANNEL_MAIN"        # default daily → main
+export SETUP_CHANNEL_CODE_STATUS="$WIZARD_CHANNEL_CODE_STATUS"
+export SETUP_CHANNEL_ARCHITECT="$WIZARD_CHANNEL_CODE_STATUS"
+export SETUP_CHANNEL_EVALUATOR="$WIZARD_CHANNEL_CODE_STATUS"
+export SETUP_CHANNEL_RESEARCHER="$WIZARD_CHANNEL_MAIN"
+export SETUP_USER_TIMEZONE="${TZ:-UTC}"
+
+bash "$CLAUDECORD_HOME/scripts/setup.sh" --non-interactive
+echo "✓ Templates filled"
+
+# ── Configure routing.json for selected agents ───────────────────────────────
+
+ROUTING_FILE="$CLAUDECORD_HOME/config/routing.json"
+
+echo ""
+echo "Configuring agent routing..."
+
+python3 - << PYEOF
+import json, os
+
+routing_file = "$ROUTING_FILE"
+
+routing = {
+  "agents": {
+    "$AI_NAME": {
+      "channels": ["$WIZARD_CHANNEL_MAIN", "$WIZARD_CHANNEL_ALERTS"]
+    }
+  },
+  "defaultAgent": "$AI_NAME"
+}
+
+agents = [a.strip() for a in "$AGENTS".split(",") if a.strip()]
+
+if "evaluator" in agents:
+    routing["agents"]["evaluator"] = {
+        "channels": ["$WIZARD_CHANNEL_CODE_STATUS"]
+    }
+
+if "researcher" in agents:
+    routing["agents"]["researcher"] = {
+        "channels": ["$WIZARD_CHANNEL_MAIN"]
+    }
+
+with open(routing_file, "w") as f:
+    json.dump(routing, f, indent=2)
+    f.write("\n")
+
+print(f"  Routing configured for: {AI_NAME}" + (", evaluator" if "evaluator" in agents else "") + (", researcher" if "researcher" in agents else ""))
+PYEOF
+
+AI_NAME_VAR="$AI_NAME"
+python3 -c "
+agents = '$AGENTS'.split(',')
+print('  evaluator' if 'evaluator' in agents else '', end='')
+print('  researcher' if 'researcher' in agents else '', end='')
+print('  reviewer' if 'reviewer' in agents else '', end='')
+print('  coder' if 'coder' in agents else '', end='')
+print()
+"
+echo "✓ routing.json written"
+
+# ── Start the system ──────────────────────────────────────────────────────────
+
+echo ""
+echo "Starting Claudecord..."
+bash "$CLAUDECORD_HOME/scripts/start.sh"

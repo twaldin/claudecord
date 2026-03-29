@@ -1,8 +1,14 @@
 import { REST, Routes, EmbedBuilder, ApplicationCommandOptionType } from 'discord.js'
 import type { Client } from 'discord.js'
+import { execSync, exec } from 'child_process'
 import { readFileSync } from 'fs'
+import { homedir } from 'os'
 import { buildStatusBoardEmbed } from './embeds.js'
 import type { StatusBoardData, PeriodStats, AgentType } from '../shared/types.js'
+
+function getClaudecordHome(): string {
+  return process.env['CLAUDECORD_HOME'] ?? `${homedir()}/claudecord`
+}
 
 // ------------------------------------------------------------------ types
 
@@ -294,6 +300,12 @@ async function handleCommand(
       const raw = interaction.options.getString('habits') ?? ''
       const list = raw.split(',').map(h => h.trim()).filter(Boolean)
       const label = list.length > 0 ? list.join(', ') : '(none)'
+      try {
+        const claudecordHome = getClaudecordHome()
+        execSync(`${claudecordHome}/scripts/send_message lifeos "Mark habits: ${label.replace(/"/g, '\\"')}"`, { timeout: 10000 })
+      } catch {
+        // non-critical — still confirm to user
+      }
       await interaction.reply({
         content: `Marking habits: ${label} — orchestrator will confirm`,
         ephemeral: true,
@@ -306,25 +318,44 @@ async function handleCommand(
         await interaction.reply({ content: 'You are not authorized to kill agents.', ephemeral: true })
         return
       }
-      const agent = interaction.options.getString('agent') ?? ''
-      await interaction.reply({ content: `Killing agent: ${agent}`, ephemeral: true })
+      const agentName = interaction.options.getString('agent') ?? ''
+      const claudecordHome = getClaudecordHome()
+      try {
+        execSync(`${claudecordHome}/scripts/kill_teammate ${agentName}`, { timeout: 10000 })
+        await interaction.reply({ content: `Killed agent: ${agentName}`, ephemeral: true })
+      } catch (err) {
+        await interaction.reply({
+          content: `Failed to kill agent: ${err instanceof Error ? err.message : String(err)}`,
+          ephemeral: true,
+        })
+      }
       break
     }
 
     case 'spawn': {
-      const type = interaction.options.getString('type') ?? 'coder'
-      const task = interaction.options.getString('task') ?? ''
-      if (!deps.channelManager) {
-        await interaction.reply({ content: 'Channel manager is not available.', ephemeral: true })
+      if (!deps.allowedUsers.includes(interaction.user.id)) {
+        await interaction.reply({ content: 'You are not authorized to spawn agents.', ephemeral: true })
         return
       }
-      const agentName = `${type}-${Date.now()}`
-      const channelId = await deps.channelManager.createAgentChannel(
-        agentName,
-        type as AgentType,
-        task
-      )
-      await interaction.reply({ content: `Agent spawned in <#${channelId}>`, ephemeral: true })
+      const type = interaction.options.getString('type') ?? 'coder'
+      const task = interaction.options.getString('task') ?? ''
+      const name = `${type}-${task.slice(0, 20).replace(/\s/g, '-').toLowerCase()}`
+      const claudecordHome = getClaudecordHome()
+      const cmd = `CLAUDECORD_SPAWN_TASK="${task}" ${claudecordHome}/scripts/spawn_teammate ${name} ${claudecordHome} --model sonnet`
+      exec(cmd)
+      if (deps.channelManager) {
+        try {
+          const channelId = await deps.channelManager.createAgentChannel(name, type as AgentType, task)
+          await interaction.reply({ content: `Agent spawned in <#${channelId}>`, ephemeral: true })
+        } catch (err) {
+          await interaction.reply({
+            content: `Error creating channel: ${err instanceof Error ? err.message : String(err)}`,
+            ephemeral: true,
+          })
+        }
+      } else {
+        await interaction.reply({ content: `Spawning agent: ${name}`, ephemeral: true })
+      }
       break
     }
   }
