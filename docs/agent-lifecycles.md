@@ -55,8 +55,8 @@ Spawned for a single task. Dies when the task is complete.
 **Death:** Agent completes task, runs the completion protocol, then `/exit`.
 
 **Completion protocol (required):**
-1. Post results to `#code-status` (channel ID `1485084317272244274`) and any other relevant channels via `claudecord_reply`
-2. Message the orchestrator with a summary via `scripts/message_lifeos`
+1. Post results to `#code-status` and any other relevant channels via `claudecord_reply`
+2. Message the orchestrator with a summary via `scripts/message_orchestrator`
 3. Run `/exit`
 
 **Config:**

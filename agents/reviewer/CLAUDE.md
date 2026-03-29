@@ -45,7 +45,7 @@ Keep a memory of past audits in state.md — track recurring issues per repo. If
 
 **Communication:**
 - Post audit embeds to your reviewer channel + #code-status
-- message_lifeos when audit is complete
+- message_orchestrator when audit is complete
 - Alert #alerts only for critical security findings
 
 ## Files
