@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { createHttpApi } from '../src/daemon/http-api.js'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { readFileSync, existsSync, unlinkSync } from 'fs'
+import { randomUUID } from 'crypto'
+import { createHttpApi, persistState, flushWrites } from '../src/daemon/http-api.js'
 import type { Server } from 'http'
 import type { AgentReply, ChannelMessage, AgentSpawnBody, WorkCompletedBody, AgentHeartbeatBody, AgentType } from '../src/shared/types.js'
 
@@ -436,5 +440,70 @@ describe('onSpawnNotify callback', () => {
     })
     noHandlerServer.close()
     expect(noHandlerEvents).toHaveLength(0)
+  })
+})
+
+describe('persistState write queue', () => {
+  it('writes data to a file atomically (no .tmp file left behind)', async () => {
+    const filePath = join(tmpdir(), `claudecord-test-${randomUUID()}.json`)
+    persistState({ hello: 'world' }, filePath)
+    await flushWrites()
+    const result = JSON.parse(readFileSync(filePath, 'utf8')) as unknown
+    expect(result).toEqual({ hello: 'world' })
+    expect(existsSync(filePath + '.tmp')).toBe(false)
+    unlinkSync(filePath)
+  })
+
+  it('serializes concurrent writes so the last queued value is final', async () => {
+    const filePath = join(tmpdir(), `claudecord-test-${randomUUID()}.json`)
+    persistState({ seq: 1 }, filePath)
+    persistState({ seq: 2 }, filePath)
+    persistState({ seq: 3 }, filePath)
+    await flushWrites()
+    const result = JSON.parse(readFileSync(filePath, 'utf8')) as { seq: number }
+    expect(result.seq).toBe(3)
+    unlinkSync(filePath)
+  })
+})
+
+describe('GET /agents', () => {
+  let agentsServer: Server
+  let agentsPort: number
+
+  function agentsUrl(path: string) {
+    return `http://localhost:${agentsPort}${path}`
+  }
+
+  beforeAll(async () => {
+    const api = createHttpApi({ onReply: async () => {} })
+    api.enqueueMessage('agent-alpha', { content: 'hi', channelId: 'c1', messageId: 'm1', userId: 'u1', username: 'user', timestamp: new Date().toISOString() })
+    await new Promise<void>((resolve) => {
+      agentsServer = api.app.listen(0, () => {
+        const addr = agentsServer.address()
+        if (addr && typeof addr === 'object') agentsPort = (addr as { port: number }).port
+        resolve()
+      })
+    })
+    // Register agent-alpha
+    await fetch(agentsUrl('/register'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentName: 'agent-alpha' }),
+    })
+  })
+
+  afterAll(() => { agentsServer.close() })
+
+  it('returns all registered agents', async () => {
+    const res = await fetch(agentsUrl('/agents'))
+    const data = await res.json() as { agents: Array<{ name: string }> }
+    expect(res.status).toBe(200)
+    expect(data.agents.some(a => a.name === 'agent-alpha')).toBe(true)
+  })
+
+  it('returns agents as an array with a name field', async () => {
+    const res = await fetch(agentsUrl('/agents'))
+    const data = await res.json() as { agents: unknown[] }
+    expect(Array.isArray(data.agents)).toBe(true)
   })
 })
