@@ -4,6 +4,8 @@
 
 set -e
 
+sed_inplace() { if [[ "$OSTYPE" == "darwin"* ]]; then sed -i '' "$@"; else sed -i "$@"; fi; }
+
 # Source .env for API secret
 CLAUDECORD_HOME="${CLAUDECORD_HOME:-$HOME/claudecord}"
 if [ -f "$CLAUDECORD_HOME/.env" ]; then
@@ -11,7 +13,7 @@ if [ -f "$CLAUDECORD_HOME/.env" ]; then
 fi
 
 NAME="$1"
-SESSION="claudecord"
+SESSION="${CLAUDECORD_SESSION:-claudecord}"
 REGISTRY="$CLAUDECORD_HOME/registry.tsv"
 
 if [ -z "$NAME" ]; then
@@ -19,20 +21,16 @@ if [ -z "$NAME" ]; then
   exit 1
 fi
 
-if [ "$NAME" = "lifeos" ]; then
-  echo "ERROR: Cannot kill LifeOS (the manager). Use 'tmux kill-session -t claudecord' to shut everything down."
+if [ "$NAME" = "orchestrator" ]; then
+  echo "ERROR: Cannot kill the orchestrator. Use 'tmux kill-session -t $SESSION' to shut everything down."
   exit 1
 fi
 
-ENTRY=$(grep "^$NAME|.*|alive" "$REGISTRY" 2>/dev/null | tail -1)
+ENTRY=$(grep "^$NAME|alive|" "$REGISTRY" 2>/dev/null | tail -1)
 if [ -z "$ENTRY" ]; then
   echo "ERROR: teammate '$NAME' not found or not alive"
   exit 1
 fi
-
-# Registry format: name|window|pane|status|dir|spawned
-WINDOW=$(echo "$ENTRY" | cut -d'|' -f2)
-PANE_INDEX=$(echo "$ENTRY" | cut -d'|' -f3)
 
 DAEMON_URL="${CLAUDECORD_DAEMON_URL:-http://localhost:19532}"
 curl -sf -X POST "$DAEMON_URL/agent/died" \
@@ -41,14 +39,10 @@ curl -sf -X POST "$DAEMON_URL/agent/died" \
   -d "{\"agentName\":\"$NAME\"}" \
   >/dev/null 2>&1 || true
 
-# Kill the pane
-tmux kill-pane -t "$SESSION:$WINDOW.$PANE_INDEX" 2>/dev/null || true
+# Kill the window
+tmux kill-window -t "$SESSION:$NAME" 2>/dev/null || true
 
 # Mark dead in registry
-if [[ "$OSTYPE" == "darwin"* ]]; then
-  sed -i '' "s/^$NAME|$WINDOW|$PANE_INDEX|alive/$NAME|$WINDOW|$PANE_INDEX|dead/" "$REGISTRY"
-else
-  sed -i "s/^$NAME|$WINDOW|$PANE_INDEX|alive/$NAME|$WINDOW|$PANE_INDEX|dead/" "$REGISTRY"
-fi
+sed_inplace "s/^$NAME|alive|/$NAME|dead|/" "$REGISTRY"
 
-echo "Killed $NAME (was pane $WINDOW.$PANE_INDEX)"
+echo "Killed $NAME"

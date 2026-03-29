@@ -5,7 +5,7 @@
 #   agent_status              # All agents
 #   agent_status <name>       # Specific agent
 #
-# Reads the Claude Code status line from each agent's tmux pane.
+# Reads the Claude Code status line from each agent's tmux window.
 # The status line typically shows: model, context %, token count, cost.
 
 SESSION="${CLAUDECORD_SESSION:-claudecord}"
@@ -21,21 +21,21 @@ fi
 
 echo "=== Agent Status ==="
 echo ""
-printf "%-15s %-8s %-10s %s\n" "NAME" "WIN.PANE" "ALIVE" "STATUS LINE"
-printf "%-15s %-8s %-10s %s\n" "----" "--------" "-----" "-----------"
+printf "%-15s %-10s %s\n" "NAME" "ALIVE" "STATUS LINE"
+printf "%-15s %-10s %s\n" "----" "-----" "-----------"
 
-while IFS='|' read -r name win pane status dir spawned; do
+while IFS='|' read -r name status dir spawned; do
   [[ "$name" == \#* ]] && continue
   [ -z "$name" ] && continue
   [ -n "$TARGET" ] && [ "$name" != "$TARGET" ] && continue
 
   # Check liveness
   ALIVE="no"
-  STATUS_LINE="(pane gone)"
-  if tmux list-panes -t "$SESSION:$win" -F '#{pane_index}' 2>/dev/null | grep -q "^$pane$"; then
+  STATUS_LINE="(window gone)"
+  if tmux list-windows -t "$SESSION" -F '#{window_name}' 2>/dev/null | grep -q "^$name$"; then
     ALIVE="yes"
     # Capture the last 5 lines — status line is usually at the bottom
-    BOTTOM=$(tmux capture-pane -t "$SESSION:$win.$pane" -p -S -5 2>/dev/null)
+    BOTTOM=$(tmux capture-pane -t "$SESSION:$name" -p -S -5 2>/dev/null)
     # Look for context/token indicators in the bottom lines
     # Claude Code status shows things like: "Opus · 45% ctx · 120k tokens · $0.52"
     STATUS_LINE=$(echo "$BOTTOM" | grep -iE '(ctx|context|token|opus|sonnet|haiku|%|cost)' | tail -1)
@@ -47,5 +47,5 @@ while IFS='|' read -r name win pane status dir spawned; do
     STATUS_LINE=$(echo "$STATUS_LINE" | cut -c1-80)
   fi
 
-  printf "%-15s %-8s %-10s %s\n" "$name" "$win.$pane" "$ALIVE" "$STATUS_LINE"
+  printf "%-15s %-10s %s\n" "$name" "$ALIVE" "$STATUS_LINE"
 done < "$REGISTRY"
