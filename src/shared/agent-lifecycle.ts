@@ -1,6 +1,6 @@
 import type { AgentType } from './types.js'
 
-export type AgentLifecycle = 'persistent' | 'scheduled' | 'ephemeral'
+export type AgentLifecycle = 'persistent' | 'ephemeral'
 
 export interface AgentDefinition {
   name: string
