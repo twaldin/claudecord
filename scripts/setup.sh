@@ -38,12 +38,16 @@ prompt() {
   local env_var="${4:-}"
 
   if [[ "$NON_INTERACTIVE" == "true" ]]; then
-    if [[ -n "$env_var" && -n "${!env_var:-}" ]]; then
+    if [[ -n "$env_var" ]] && [[ -n "${!env_var+x}" ]]; then
       eval "$var_name=\"${!env_var}\""
       return
     fi
     if [[ -n "$default_val" ]]; then
       eval "$var_name=\"$default_val\""
+      return
+    fi
+    if [[ -n "$env_var" ]] && declare -p "$env_var" &>/dev/null; then
+      eval "$var_name=\"\""
       return
     fi
     echo "ERROR: $var_name not set and --non-interactive specified" >&2
@@ -125,7 +129,10 @@ REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # .mcp.json files are written fresh (not sed-patched) to avoid permission prompts in Claude Code.
 # Collect only markdown files for sed substitution.
-mapfile -t target_files < <(find "$REPO_ROOT/agents" -type f -name "*.md" 2>/dev/null)
+target_files=()
+while IFS= read -r f; do
+  target_files+=("$f")
+done < <(find "$REPO_ROOT/agents" -type f -name "*.md" 2>/dev/null)
 
 if [[ ${#target_files[@]} -eq 0 ]]; then
   echo "WARNING: No agent files found in $REPO_ROOT/agents" >&2

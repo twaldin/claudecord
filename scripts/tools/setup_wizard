@@ -43,7 +43,7 @@ for var in "${required_vars[@]}"; do
   fi
 done
 
-AI_NAME="${WIZARD_AI_NAME,,}"  # lowercase
+AI_NAME="$(echo "$WIZARD_AI_NAME" | tr '[:upper:]' '[:lower:]')"  # lowercase
 AGENTS="${WIZARD_AGENTS:-all}"
 if [[ "$AGENTS" == "all" || -z "$AGENTS" ]]; then
   AGENTS="coder,evaluator,researcher,reviewer"
@@ -143,6 +143,8 @@ export SETUP_CHANNEL_ARCHITECT="$WIZARD_CHANNEL_CODE_STATUS"
 export SETUP_CHANNEL_EVALUATOR="$WIZARD_CHANNEL_CODE_STATUS"
 export SETUP_CHANNEL_RESEARCHER="$WIZARD_CHANNEL_MAIN"
 export SETUP_USER_TIMEZONE="${TZ:-UTC}"
+export SETUP_PROJECT_DIR="$HOME/project"
+export SETUP_DEPLOY_COMMAND=""
 
 bash "$CLAUDECORD_HOME/scripts/setup.sh" --non-interactive
 echo "✓ Templates filled"
@@ -184,7 +186,7 @@ with open(routing_file, "w") as f:
     json.dump(routing, f, indent=2)
     f.write("\n")
 
-print(f"  Routing configured for: {AI_NAME}" + (", evaluator" if "evaluator" in agents else "") + (", researcher" if "researcher" in agents else ""))
+print("  Routing configured for: $AI_NAME" + (", evaluator" if "evaluator" in agents else "") + (", researcher" if "researcher" in agents else ""))
 PYEOF
 
 AI_NAME_VAR="$AI_NAME"
