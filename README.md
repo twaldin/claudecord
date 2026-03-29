@@ -45,6 +45,17 @@ node --version
 # Claude Code CLI
 npm install -g @anthropic-ai/claude-code
 
+# tmux (for agent process management)
+# macOS: brew install tmux
+# Ubuntu: sudo apt install tmux
+
+# GitHub CLI (optional, for coder/evaluator agents)
+# macOS: brew install gh
+# Ubuntu: sudo apt install gh
+
+# Python 3 (optional, for some utility scripts)
+python3 --version
+
 # Project dependencies
 npm install
 ```

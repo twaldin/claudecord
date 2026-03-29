@@ -97,7 +97,7 @@ Look for:
 ```bash
 cd {{project_dir}}
 # Check for untested files
-npx jest --coverage --coverageReporters=json 2>/dev/null | python3 -c "
+npx vitest run --coverage 2>/dev/null; python3 -c "
 import json, sys
 try:
     data = json.load(open('coverage/coverage-summary.json'))
