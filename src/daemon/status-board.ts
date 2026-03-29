@@ -15,16 +15,23 @@ export function createStatusBoard(deps: StatusBoardDeps) {
   let timer: ReturnType<typeof setInterval> | null = null
 
   async function post(): Promise<void> {
-    const snapshot = deps.getSnapshot()
-    const embed = buildStatusBoardEmbed(snapshot)
-    if (messageId) {
-      try {
-        await deps.editMessage(deps.channelId, messageId, embed)
-      } catch {
+    try {
+      const snapshot = deps.getSnapshot()
+      const embed = buildStatusBoardEmbed(snapshot)
+      if (messageId) {
+        try {
+          await deps.editMessage(deps.channelId, messageId, embed)
+          console.log(`[status-board] Updated embed (${snapshot.agents.length} agents)`)
+        } catch {
+          messageId = await deps.sendEmbed(deps.channelId, embed)
+          console.log(`[status-board] Re-posted embed, new messageId: ${messageId}`)
+        }
+      } else {
         messageId = await deps.sendEmbed(deps.channelId, embed)
+        console.log(`[status-board] Initial embed posted, messageId: ${messageId}`)
       }
-    } else {
-      messageId = await deps.sendEmbed(deps.channelId, embed)
+    } catch (err) {
+      console.error('[status-board] Failed to post:', err instanceof Error ? err.message : err)
     }
   }
 

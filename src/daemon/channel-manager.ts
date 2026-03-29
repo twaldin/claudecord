@@ -57,7 +57,10 @@ interface DiscordChannelLike {
 interface DiscordGuildLike {
   channels: {
     create: (opts: { name: string; type: number; parent?: string; topic?: string }) => Promise<{ id: string }>
-    cache: { get(key: string): DiscordChannelLike | undefined }
+    cache: {
+      get(key: string): DiscordChannelLike | undefined
+      find(fn: (ch: { name: string; type: number; id: string }) => boolean): { id: string } | undefined
+    }
   }
 }
 
@@ -89,12 +92,32 @@ export function createChannelManager(deps: ChannelManagerDeps): ChannelManager {
     return guild
   }
 
+  async function findOrCreateCategory(guild: DiscordGuildLike, categoryName: string): Promise<string> {
+    const existing = guild.channels.cache.find(ch => ch.name === categoryName && ch.type === ChannelType.GuildCategory)
+    if (existing) return existing.id
+    const created = await guild.channels.create({ name: categoryName, type: ChannelType.GuildCategory })
+    console.log(`[channel-manager] Created category: ${categoryName} (${created.id})`)
+    return created.id
+  }
+
   async function createAgentChannel(agentName: string, agentType: AgentType, task: string): Promise<string> {
     if (AGENT_TYPE_LIFECYCLE[agentType] === 'persistent') {
       throw new Error(`Cannot create channel for persistent agent '${agentName}' — use pre-configured channels`)
     }
     const guild = getGuild()
-    const channel = await guild.channels.create({ name: agentName, type: ChannelType.GuildText })
+
+    // Find or create the category for this agent type
+    const categoryName = getCategoryName(agentType)
+    let parentId: string | undefined
+    if (categoryName) {
+      try {
+        parentId = await findOrCreateCategory(guild, categoryName)
+      } catch (err) {
+        console.error(`[channel-manager] Failed to create category ${categoryName}:`, err instanceof Error ? err.message : err)
+      }
+    }
+
+    const channel = await guild.channels.create({ name: agentName, type: ChannelType.GuildText, parent: parentId })
 
     const spawnedAt = new Date().toISOString()
     const embed = buildSpawnEmbed({ agentName, agentType, task, spawnedAt, channelName: agentName })

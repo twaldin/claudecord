@@ -109,7 +109,9 @@ substitutions=(
   "s|{{channel_coder_id}}|${CHANNEL_CODE}|g"
   "s|{{channel_general_id}}|${CHANNEL_MAIN}|g"
   "s|{{project_dir}}|${PROJECT_DIR}|g"
+  "s|{{primary_project}}|${PROJECT_DIR}|g"
   "s|{{user_timezone}}|${USER_TZ}|g"
+  "s|{{timestamp}}|$(date -Iseconds)|g"
 )
 
 # Deploy command: only substitute if non-empty (leave placeholder if not set)
@@ -175,13 +177,13 @@ EOF
   echo "  ✓ $mcp_path"
 }
 
-for agent in orchestrator architect evaluator researcher; do
+for agent in orchestrator architect evaluator researcher reviewer; do
   write_mcp_json "$agent"
 done
 
 # ── Verify remaining placeholders ─────────────────────────────────────────────
 echo ""
-remaining=$(grep -roh '{{[^}]*}}' "$REPO_ROOT/agents" 2>/dev/null | grep -v '{{timestamp}}' | grep -v '{{primary_project}}' | sort -u)
+remaining=$(grep -roh '{{[^}]*}}' "$REPO_ROOT/agents" 2>/dev/null | sort -u)
 if [[ -n "$remaining" ]]; then
   echo "Remaining placeholders (fill these manually):"
   echo "$remaining" | sed 's/^/  /'
