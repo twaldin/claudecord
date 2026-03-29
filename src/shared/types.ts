@@ -1,5 +1,5 @@
 export type AgentType = 'coder' | 'researcher' | 'evaluator' | 'persistent'
-export type AgentLifecycle = 'persistent' | 'scheduled' | 'ephemeral'
+export type AgentLifecycle = 'persistent' | 'ephemeral'
 
 export interface AgentStateEntry {
   name: string

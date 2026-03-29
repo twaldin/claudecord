@@ -16,19 +16,8 @@ describe('getDefaultCompletionProtocol', () => {
     expect(protocol?.messageOrchestrator).toBe(true)
   })
 
-  it('returns autoExit:true and messageOrchestrator:true for scheduled', () => {
-    const protocol = getDefaultCompletionProtocol('scheduled')
-    expect(protocol?.autoExit).toBe(true)
-    expect(protocol?.messageOrchestrator).toBe(true)
-  })
-
   it('returns empty postTo array for ephemeral by default', () => {
     const protocol = getDefaultCompletionProtocol('ephemeral')
-    expect(protocol?.postTo).toEqual([])
-  })
-
-  it('returns empty postTo array for scheduled by default', () => {
-    const protocol = getDefaultCompletionProtocol('scheduled')
     expect(protocol?.postTo).toEqual([])
   })
 })
@@ -41,10 +30,6 @@ describe('shouldRespawnOnCrash', () => {
   it('returns false for ephemeral', () => {
     expect(shouldRespawnOnCrash('ephemeral')).toBe(false)
   })
-
-  it('returns false for scheduled', () => {
-    expect(shouldRespawnOnCrash('scheduled')).toBe(false)
-  })
 })
 
 describe('shouldSelfCompact', () => {
@@ -54,9 +39,5 @@ describe('shouldSelfCompact', () => {
 
   it('returns false for ephemeral', () => {
     expect(shouldSelfCompact('ephemeral')).toBe(false)
-  })
-
-  it('returns false for scheduled', () => {
-    expect(shouldSelfCompact('scheduled')).toBe(false)
   })
 })
