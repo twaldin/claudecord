@@ -167,14 +167,24 @@ async function main() {
 
   setInterval(() => void poll(), POLL_INTERVAL_MS)
 
-  // Periodic re-registration so the shim reconnects after daemon restarts
+  // 30s heartbeat: updates daemon with current context% and re-registers if daemon restarted
+  const HEARTBEAT_INTERVAL_MS = 30000
   setInterval(() => {
+    // Re-register so the shim reconnects after daemon restarts
     void daemonFetch('/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ agentName: AGENT_NAME }),
     })
-  }, 30000)
+    // Send heartbeat with context% (0 for now — real tracking is future work)
+    void daemonFetch('/agent/heartbeat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentName: AGENT_NAME, contextPct: 0, status: 'working' }),
+    }).then(res => {
+      if (!res) console.error('[shim] Heartbeat failed — daemon unreachable')
+    })
+  }, HEARTBEAT_INTERVAL_MS)
 }
 
 main().catch((err) => {

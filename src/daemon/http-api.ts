@@ -1,6 +1,6 @@
 import express, { type Request, type Response } from 'express'
 import { writeFileSync, renameSync } from 'fs'
-import type { ChannelMessage, AgentReply, AgentSpawnBody, WorkCompletedBody, AgentHeartbeatBody, AgentType } from '../shared/types.js'
+import type { ChannelMessage, AgentReply, AgentSpawnBody, WorkCompletedBody, AgentHeartbeatBody, AgentType, AgentLifecycle, AgentStateEntry } from '../shared/types.js'
 
 let writeQueue: Promise<void> = Promise.resolve()
 
@@ -25,10 +25,16 @@ export interface HttpApiDeps {
   onAgentDied?: (data: { agentName: string }) => Promise<void>
   onWorkCompleted?: (data: WorkCompletedBody) => Promise<void>
   onAgentHeartbeat?: (data: AgentHeartbeatBody) => Promise<void>
+  agentStatePath?: string
 }
 
 const VALID_AGENT_TYPES = new Set(['coder', 'researcher', 'evaluator', 'persistent'])
 const VALID_STATUSES = new Set(['idle', 'working', 'compacting', 'dead'])
+const VALID_LIFECYCLES = new Set<AgentLifecycle>(['persistent', 'scheduled', 'ephemeral'])
+
+function isValidModel(m: string): m is 'opus' | 'sonnet' | 'haiku' {
+  return m === 'opus' || m === 'sonnet' || m === 'haiku'
+}
 
 export function createHttpApi(deps: HttpApiDeps) {
   const app = express()
@@ -47,8 +53,36 @@ export function createHttpApi(deps: HttpApiDeps) {
     })
   }
 
-  const registeredAgents = new Set<string>()
+  const agentRegistry = new Map<string, AgentStateEntry>()
   const messageQueues = new Map<string, ChannelMessage[]>()
+
+  function persistRegistry(): void {
+    if (!deps.agentStatePath) return
+    const agents: Record<string, AgentStateEntry> = {}
+    for (const [name, entry] of agentRegistry) {
+      agents[name] = entry
+    }
+    persistState({ schemaVersion: 1, agents }, deps.agentStatePath)
+  }
+
+  function hydrateRegistry(entries: Record<string, AgentStateEntry>): void {
+    for (const [name, entry] of Object.entries(entries)) {
+      agentRegistry.set(name, entry)
+    }
+  }
+
+  function getAgentRegistry(): Map<string, AgentStateEntry> {
+    return agentRegistry
+  }
+
+  // Backwards-compat: returns names of agents with shimConnected=true
+  function getRegisteredAgents(): string[] {
+    const result: string[] = []
+    for (const entry of agentRegistry.values()) {
+      if (entry.shimConnected) result.push(entry.name)
+    }
+    return result
+  }
 
   app.post('/register', (req: Request, res: Response) => {
     const { agentName } = req.body as { agentName?: string }
@@ -57,7 +91,30 @@ export function createHttpApi(deps: HttpApiDeps) {
       return
     }
 
-    registeredAgents.add(agentName)
+    const existing = agentRegistry.get(agentName)
+    if (existing) {
+      existing.shimConnected = true
+    } else {
+      // Create minimal entry for agents that register without a prior spawn
+      const entry: AgentStateEntry = {
+        name: agentName,
+        lifecycle: 'ephemeral',
+        type: 'persistent',
+        status: 'alive',
+        directory: '',
+        spawnedAt: new Date().toISOString(),
+        diedAt: null,
+        model: 'sonnet',
+        channelId: null,
+        contextPct: null,
+        agentStatus: null,
+        task: null,
+        shimConnected: true,
+        lastHeartbeatAt: null,
+      }
+      agentRegistry.set(agentName, entry)
+    }
+    persistRegistry()
 
     // Flush any buffered messages
     const buffered = messageQueues.get(agentName) ?? []
@@ -98,15 +155,17 @@ export function createHttpApi(deps: HttpApiDeps) {
   })
 
   app.get('/health', (_req: Request, res: Response) => {
+    // Backwards compat: return agent names for shimConnected agents
+    const agents = getRegisteredAgents()
     res.json({
       status: 'ok',
-      agents: Array.from(registeredAgents),
+      agents,
       uptime: process.uptime(),
     })
   })
 
   app.get('/agents', (_req: Request, res: Response) => {
-    const agents = Array.from(registeredAgents).map(name => ({ name }))
+    const agents = Array.from(agentRegistry.values())
     res.json({ agents })
   })
 
@@ -125,14 +184,50 @@ export function createHttpApi(deps: HttpApiDeps) {
       return
     }
 
+    const { agentName, agentType, task, issueNumber, prNumber, worktreePath } = body
+    const lifecycle: AgentLifecycle = (body.lifecycle && VALID_LIFECYCLES.has(body.lifecycle))
+      ? body.lifecycle
+      : 'ephemeral'
+    const rawModel = body.model ?? 'sonnet'
+    const model: 'opus' | 'sonnet' | 'haiku' = isValidModel(rawModel) ? rawModel : 'sonnet'
+    const directory = body.directory ?? worktreePath ?? ''
+
+    // 409 if an alive entry already exists
+    const existing = agentRegistry.get(agentName)
+    if (existing && existing.status === 'alive') {
+      res.status(409).json({ error: `Agent ${agentName} is already alive` })
+      return
+    }
+
+    const entry: AgentStateEntry = {
+      name: agentName,
+      lifecycle,
+      type: agentType,
+      status: 'alive',
+      directory,
+      spawnedAt: new Date().toISOString(),
+      diedAt: null,
+      model,
+      channelId: null,
+      contextPct: null,
+      agentStatus: null,
+      task: task ?? null,
+      shimConnected: false,
+      lastHeartbeatAt: null,
+    }
+    agentRegistry.set(agentName, entry)
+    persistRegistry()
+
     const spawnData: AgentSpawnBody = {
-      agentName: body.agentName,
-      agentType: body.agentType,
-      task: body.task,
-      issueNumber: body.issueNumber,
-      prNumber: body.prNumber,
-      worktreePath: body.worktreePath,
-      model: body.model,
+      agentName,
+      agentType,
+      task,
+      lifecycle,
+      directory,
+      issueNumber,
+      prNumber,
+      worktreePath,
+      model,
     }
 
     const handler = deps.onAgentSpawn
@@ -143,12 +238,14 @@ export function createHttpApi(deps: HttpApiDeps) {
 
     handler(spawnData)
       .then(({ channelId }) => {
+        entry.channelId = channelId
+        persistRegistry()
         res.json({ ok: true, channelId })
         if (deps.onSpawnNotify) {
           void deps.onSpawnNotify({
-            agentName: spawnData.agentName,
-            agentType: spawnData.agentType,
-            task: spawnData.task,
+            agentName,
+            agentType,
+            task,
             channelId,
           })
         }
@@ -166,6 +263,18 @@ export function createHttpApi(deps: HttpApiDeps) {
       res.status(400).json({ error: 'agentName required' })
       return
     }
+
+    const entry = agentRegistry.get(body.agentName)
+    if (!entry) {
+      res.status(404).json({ error: `Agent ${body.agentName} not found` })
+      return
+    }
+
+    entry.status = 'dead'
+    entry.diedAt = new Date().toISOString()
+    entry.agentStatus = 'dead'
+    entry.contextPct = null
+    persistRegistry()
 
     const handler = deps.onAgentDied
     if (!handler) {
@@ -231,6 +340,14 @@ export function createHttpApi(deps: HttpApiDeps) {
       return
     }
 
+    const entry = agentRegistry.get(body.agentName)
+    if (entry) {
+      entry.contextPct = body.contextPct
+      entry.agentStatus = body.status as AgentStateEntry['agentStatus']
+      entry.lastHeartbeatAt = new Date().toISOString()
+      persistRegistry()
+    }
+
     const heartbeatData: AgentHeartbeatBody = {
       agentName: body.agentName,
       contextPct: body.contextPct,
@@ -263,9 +380,5 @@ export function createHttpApi(deps: HttpApiDeps) {
     }
   }
 
-  function getRegisteredAgents(): string[] {
-    return Array.from(registeredAgents)
-  }
-
-  return { app, enqueueMessage, getRegisteredAgents }
+  return { app, enqueueMessage, getRegisteredAgents, getAgentRegistry, hydrateRegistry }
 }

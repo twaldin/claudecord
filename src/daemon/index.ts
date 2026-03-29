@@ -9,7 +9,7 @@ import { createChannelManager, type ChannelManagerDeps, type ChannelManager } fr
 import { createStatusBoard } from './status-board.js'
 import { registerSlashCommands, handleInteraction } from './slash-commands.js'
 import { loadStats, getStatsForPeriod } from './stats.js'
-import type { AgentStatusEntry } from '../shared/types.js'
+import type { AgentStateEntry, AgentType } from '../shared/types.js'
 import type { SlashCommandDeps } from './slash-commands.js'
 
 const PID_FILE = resolve(homedir(), '.claudecord-daemon.pid')
@@ -68,11 +68,6 @@ async function main() {
   console.log(`[daemon] Loaded routing: ${Object.keys(routingConfig.agents).join(', ')}`)
 
   const agentStatePath = resolve(homedir(), '.claudecord-agent-state.json')
-  type MinimalEntry = { name: string; status: 'alive' | 'dead'; spawnedAt: string; diedAt: string | null }
-  const agentState: { schemaVersion: 1; agents: Record<string, MinimalEntry> } = {
-    schemaVersion: 1,
-    agents: {},
-  }
 
   const guildId = process.env['DISCORD_GUILD_ID']
   const codeStatusChannelId = process.env['DISCORD_CODE_STATUS_CHANNEL_ID']
@@ -103,6 +98,7 @@ async function main() {
   })
 
   const api = createHttpApi({
+    agentStatePath,
     onReply: async (reply) => {
       if (reply.embed !== undefined) {
         await discord.sendToChannel(
@@ -115,22 +111,11 @@ async function main() {
       }
     },
     onAgentSpawn: async (data) => {
-      agentState.agents[data.agentName] = {
-        name: data.agentName,
-        status: 'alive',
-        spawnedAt: new Date().toISOString(),
-        diedAt: null,
-      }
       if (!channelManager) return { channelId: '' }
       const channelId = await channelManager.createAgentChannel(data.agentName, data.agentType, data.task)
       return { channelId }
     },
     onAgentDied: async ({ agentName }) => {
-      const stateEntry = agentState.agents[agentName]
-      if (stateEntry) {
-        stateEntry.status = 'dead'
-        stateEntry.diedAt = new Date().toISOString()
-      }
       if (!channelManager) return
       const entry = channelManager.getState().find(e => e.agentName === agentName && e.status === 'active')
       if (!entry) return
@@ -143,6 +128,48 @@ async function main() {
       console.log('[daemon] heartbeat:', data.agentName, data.status, data.contextPct)
     },
   })
+
+  // Hydrate registry from agent-state.json
+  if (existsSync(agentStatePath)) {
+    try {
+      const raw = JSON.parse(readFileSync(agentStatePath, 'utf8')) as {
+        schemaVersion: number
+        agents: Record<string, AgentStateEntry>
+      }
+      if (raw.schemaVersion === 1 && raw.agents) {
+        api.hydrateRegistry(raw.agents)
+        console.log(`[daemon] Hydrated ${Object.keys(raw.agents).length} agents from agent-state.json`)
+      }
+    } catch (err) {
+      console.error('[daemon] Failed to load agent-state.json:', err instanceof Error ? err.message : err)
+    }
+  }
+
+  // Bootstrap synthetic entries for persistent agents in routing.json not already in registry
+  const registry = api.getAgentRegistry()
+  for (const [agentName, agentConfig] of Object.entries(routingConfig.agents)) {
+    if (!registry.has(agentName)) {
+      const channelId = agentConfig.channels[0] ?? null
+      const syntheticEntry: AgentStateEntry = {
+        name: agentName,
+        lifecycle: 'persistent',
+        type: (agentConfig.meta?.agentType ?? 'persistent') as AgentType,
+        status: 'alive',
+        directory: '',
+        spawnedAt: agentConfig.meta?.spawnedAt ?? new Date().toISOString(),
+        diedAt: null,
+        model: 'sonnet',
+        channelId: channelId ?? null,
+        contextPct: null,
+        agentStatus: null,
+        task: agentConfig.meta?.task ?? null,
+        shimConnected: false,
+        lastHeartbeatAt: null,
+      }
+      registry.set(agentName, syntheticEntry)
+      console.log(`[daemon] Bootstrapped synthetic entry for ${agentName}`)
+    }
+  }
 
   await discord.login()
 
@@ -178,25 +205,16 @@ async function main() {
 
   function buildSnapshot() {
     const now = new Date().toISOString()
-    const orchestrator: AgentStatusEntry = {
-      name: 'orchestrator', type: 'persistent', status: 'working', lastActivity: now,
-    }
-    const registeredEntries: AgentStatusEntry[] = api.getRegisteredAgents().map(agentName => ({
-      name: agentName, type: 'persistent' as const, status: 'idle' as const, lastActivity: now,
-    }))
-    const channelEntries: AgentStatusEntry[] = channelManager
-      ? channelManager.getState().map(entry => ({
-          name: entry.agentName, type: entry.agentType,
-          status: entry.status === 'active' ? 'working' as const : 'dead' as const,
-          lastActivity: entry.diedAt ?? entry.spawnedAt,
-          channelId: entry.channelId,
-        }))
-      : []
-    const seen = new Set<string>()
-    const agents: AgentStatusEntry[] = []
-    for (const entry of [orchestrator, ...registeredEntries, ...channelEntries]) {
-      if (!seen.has(entry.name)) { seen.add(entry.name); agents.push(entry) }
-    }
+    const agents = Array.from(registry.values())
+      .filter(e => e.status === 'alive')
+      .map(e => ({
+        name: e.name,
+        type: e.type,
+        status: e.agentStatus ?? ('idle' as const),
+        contextPct: e.contextPct ?? undefined,
+        lastActivity: e.lastHeartbeatAt ?? e.spawnedAt,
+        channelId: e.channelId ?? undefined,
+      }))
     return { agents, taskCounts: { p0: 0, p1: 0, p2: 0 }, systemHealth: 'healthy' as const, lastUpdated: now }
   }
 
@@ -220,46 +238,7 @@ async function main() {
       sendEmbed: discord.sendBuiltEmbed,
       editMessage: discord.editBuiltEmbed,
       channelId: process.env['DISCORD_STATUS_CHANNEL_ID'],
-      getSnapshot: () => {
-        const now = new Date().toISOString()
-        const orchestrator: AgentStatusEntry = {
-          name: 'orchestrator',
-          type: 'persistent',
-          status: 'working',
-          lastActivity: now,
-        }
-        const registeredEntries: AgentStatusEntry[] = api.getRegisteredAgents().map(agentName => ({
-          name: agentName,
-          type: 'persistent' as const,
-          status: 'idle' as const,
-          lastActivity: now,
-        }))
-        const channelEntries: AgentStatusEntry[] = channelManager
-          ? channelManager.getState()
-              .filter(entry => entry.status === 'active')
-              .map(entry => ({
-                name: entry.agentName,
-                type: entry.agentType,
-                status: 'working' as const,
-                lastActivity: entry.spawnedAt,
-                channelId: entry.channelId,
-              }))
-          : []
-        const seen = new Set<string>()
-        const agents: AgentStatusEntry[] = []
-        for (const entry of [orchestrator, ...registeredEntries, ...channelEntries]) {
-          if (!seen.has(entry.name)) {
-            seen.add(entry.name)
-            agents.push(entry)
-          }
-        }
-        return {
-          agents,
-          taskCounts: { p0: 0, p1: 0, p2: 0 },
-          systemHealth: 'healthy' as const,
-          lastUpdated: now,
-        }
-      },
+      getSnapshot: buildSnapshot,
       intervalMs: 60000,
     })
     statusBoard.start()
@@ -273,9 +252,13 @@ async function main() {
   // Graceful shutdown
   const shutdown = async () => {
     console.log('[daemon] Shutting down...')
-    if (agentStatePath && agentState) {
+    if (agentStatePath) {
       try {
-        persistState(agentState, agentStatePath)
+        const agents: Record<string, AgentStateEntry> = {}
+        for (const [name, entry] of registry) {
+          agents[name] = entry
+        }
+        persistState({ schemaVersion: 1, agents }, agentStatePath)
         console.log('[daemon] Agent state persisted')
       } catch {}
     }

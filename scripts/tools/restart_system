@@ -1,0 +1,132 @@
+#!/bin/bash
+# restart_system — Kill all agents, restart daemon, respawn persistent agents, verify health
+#
+# Usage:
+#   restart_system              # Full restart
+#   restart_system --daemon     # Restart daemon only (agents stay if possible)
+#   restart_system --agents     # Respawn persistent agents only (daemon stays)
+
+set -e
+
+CLAUDECORD_HOME="${CLAUDECORD_HOME:-$HOME/claudecord}"
+if [ -f "$CLAUDECORD_HOME/.env" ]; then
+  set -a; source "$CLAUDECORD_HOME/.env"; set +a
+fi
+
+SESSION="claudecord"
+REGISTRY="$CLAUDECORD_HOME/registry.tsv"
+DAEMON_PORT="${CLAUDECORD_ROUTER_PORT:-19532}"
+PID_FILE="$HOME/.claudecord-daemon.pid"
+SCRIPTS="$CLAUDECORD_HOME/scripts"
+
+MODE="${1:-full}"
+
+echo "=== Claudecord System Restart (mode: $MODE) ==="
+
+# --- Phase 1: Kill all non-LifeOS agents ---
+if [ "$MODE" != "--agents" ]; then
+  echo ""
+  echo "Phase 1: Killing all agents..."
+  for win in $(tmux list-windows -t "$SESSION" -F '#{window_name}' 2>/dev/null); do
+    case "$win" in
+      main|lifeos) continue ;;  # Never kill LifeOS or main
+      *)
+        echo "  Killing $win..."
+        "$SCRIPTS/kill_teammate" "$win" 2>/dev/null || tmux kill-window -t "$SESSION:$win" 2>/dev/null || true
+        ;;
+    esac
+  done
+  echo "  All agents killed."
+fi
+
+# --- Phase 2: Restart daemon ---
+if [ "$MODE" != "--agents" ]; then
+  echo ""
+  echo "Phase 2: Restarting daemon..."
+
+  # Kill old daemon
+  if [ -f "$PID_FILE" ]; then
+    OLD_PID=$(cat "$PID_FILE" 2>/dev/null)
+    if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
+      echo "  Killing old daemon (PID $OLD_PID)..."
+      kill "$OLD_PID" 2>/dev/null || true
+      sleep 2
+      # Force kill if still alive
+      kill -0 "$OLD_PID" 2>/dev/null && kill -9 "$OLD_PID" 2>/dev/null || true
+    fi
+    rm -f "$PID_FILE"
+  fi
+
+  # Start new daemon
+  echo "  Starting daemon on port $DAEMON_PORT..."
+  cd "$CLAUDECORD_HOME"
+  npx tsx src/daemon/index.ts &
+  DAEMON_PID=$!
+  cd - >/dev/null
+
+  # Wait for health
+  echo "  Waiting for daemon health..."
+  for i in $(seq 1 10); do
+    sleep 1
+    if curl -sf "http://localhost:$DAEMON_PORT/health" >/dev/null 2>&1; then
+      echo "  Daemon healthy (PID $DAEMON_PID)"
+      break
+    fi
+    if [ $i -eq 10 ]; then
+      echo "  ERROR: Daemon failed to start after 10s"
+      exit 1
+    fi
+  done
+fi
+
+# --- Phase 3: Respawn persistent agents ---
+echo ""
+echo "Phase 3: Spawning persistent agents..."
+
+# Define persistent agents: name|dir|model
+PERSISTENT_AGENTS=(
+  "monitor|$CLAUDECORD_HOME/agents/monitor|sonnet"
+  "trader|$CLAUDECORD_HOME/agents/trader|opus"
+)
+
+for entry in "${PERSISTENT_AGENTS[@]}"; do
+  IFS='|' read -r name dir model <<< "$entry"
+
+  # Check if already alive
+  if tmux list-windows -t "$SESSION" -F '#{window_name}' 2>/dev/null | grep -q "^${name}$"; then
+    echo "  $name — already alive, skipping"
+    continue
+  fi
+
+  if [ -d "$dir" ]; then
+    echo "  Spawning $name ($model)..."
+    "$SCRIPTS/spawn_teammate" "$name" "$dir" --model "$model" 2>/dev/null || echo "  WARNING: Failed to spawn $name"
+  else
+    echo "  WARNING: $dir does not exist, skipping $name"
+  fi
+done
+
+# --- Phase 4: Verify ---
+echo ""
+echo "Phase 4: Verifying system health..."
+sleep 3
+
+# Check daemon
+if curl -sf "http://localhost:$DAEMON_PORT/health" >/dev/null 2>&1; then
+  HEALTH=$(curl -sf "http://localhost:$DAEMON_PORT/health")
+  echo "  Daemon: OK — $HEALTH"
+else
+  echo "  Daemon: FAILED"
+fi
+
+# Check windows
+echo "  Tmux windows:"
+tmux list-windows -t "$SESSION" -F '    #{window_name} — #{pane_current_command}' 2>/dev/null || echo "    ERROR: tmux session not found"
+
+# Run reconcile
+echo ""
+echo "  Running reconcile..."
+"$SCRIPTS/reconcile_registry" 2>/dev/null || echo "  WARNING: reconcile failed"
+
+echo ""
+echo "=== Restart complete ==="

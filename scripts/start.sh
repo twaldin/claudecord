@@ -61,7 +61,7 @@ fi
 
 # Create tmux session with orchestrator in its own named window
 tmux new-session -d -s "$SESSION" -n "orchestrator" -c "$ORCHESTRATOR_DIR" \
-  "export CLAUDECORD_AGENT_NAME=orchestrator; export PATH=\"$CLAUDECORD_HOME/scripts/agents:$CLAUDECORD_HOME/scripts/tools:\$PATH\"; claude --dangerously-skip-permissions"
+  "export CLAUDECORD_AGENT_NAME=orchestrator; export PATH=\"$CLAUDECORD_HOME/scripts/agents:$CLAUDECORD_HOME/scripts/tools:\$PATH\"; claude --channels plugin:discord:discord --dangerously-skip-permissions"
 
 # Register orchestrator (format: name|status|directory|spawned_at)
 echo "orchestrator|alive|$ORCHESTRATOR_DIR|$(date -Iseconds)" >> "$REGISTRY"
