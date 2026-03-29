@@ -18,8 +18,8 @@ if [ -z "$NAME" ]; then
   exit 1
 fi
 
-if [ "$NAME" = "lifeos" ]; then
-  echo "ERROR: Cannot kill LifeOS (the manager). Use 'tmux kill-session -t claudecord' to shut everything down."
+if [ "$NAME" = "orchestrator" ]; then
+  echo "ERROR: Cannot kill the orchestrator (the manager). Use 'tmux kill-session -t claudecord' to shut everything down."
   exit 1
 fi
 

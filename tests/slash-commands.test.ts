@@ -279,3 +279,24 @@ describe('autocomplete for /kill', () => {
     expect(deps.getRegisteredAgents).toHaveBeenCalled()
   })
 })
+
+// -------------------------------------------------- /kill injection rejection
+
+describe('/kill — injection rejection', () => {
+  const dangerousNames = ['trader; rm -rf /', 'a|b', 'x`whoami`', '$HOME', 'BAD_NAME', 'has space']
+
+  for (const name of dangerousNames) {
+    it(`rejects dangerous agent name ${JSON.stringify(name)}`, async () => {
+      const interaction = makeChatInput('kill', { agent: name }, 'authorized-user')
+      await handleInteraction(interaction, deps)
+      const reply = getReply(interaction)
+      expect(reply).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ephemeral: true,
+          content: expect.stringContaining('Invalid agent name'),
+        })
+      )
+    })
+  }
+})
+

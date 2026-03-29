@@ -1,6 +1,7 @@
 import { REST, Routes, EmbedBuilder, ApplicationCommandOptionType } from 'discord.js'
 import type { Client } from 'discord.js'
-import { execSync, exec } from 'child_process'
+import { execFileSync } from 'child_process'
+import { validateAgentName } from './channel-manager.js'
 import { readFileSync } from 'fs'
 import { homedir } from 'os'
 import { buildStatusBoardEmbed } from './embeds.js'
@@ -302,7 +303,7 @@ async function handleCommand(
       const label = list.length > 0 ? list.join(', ') : '(none)'
       try {
         const claudecordHome = getClaudecordHome()
-        execSync(`${claudecordHome}/scripts/agents/send_message orchestrator "Mark habits: ${label.replace(/"/g, '\\"')}"`, { timeout: 10000 })
+        execFileSync(`${claudecordHome}/scripts/agents/send_message`, ['orchestrator', `Mark habits: ${label}`], { timeout: 10000 })
       } catch {
         // non-critical — still confirm to user
       }
@@ -319,9 +320,13 @@ async function handleCommand(
         return
       }
       const agentName = interaction.options.getString('agent') ?? ''
+      if (!validateAgentName(agentName)) {
+        await interaction.reply({ content: 'Invalid agent name.', ephemeral: true })
+        return
+      }
       const claudecordHome = getClaudecordHome()
       try {
-        execSync(`${claudecordHome}/scripts/kill_teammate ${agentName}`, { timeout: 10000 })
+        execFileSync(`${claudecordHome}/scripts/kill_teammate`, [agentName], { timeout: 10000 })
         await interaction.reply({ content: `Killed agent: ${agentName}`, ephemeral: true })
       } catch (err) {
         await interaction.reply({
@@ -341,8 +346,10 @@ async function handleCommand(
       const task = interaction.options.getString('task') ?? ''
       const name = `${type}-${task.slice(0, 20).replace(/\s/g, '-').toLowerCase()}`
       const claudecordHome = getClaudecordHome()
-      const cmd = `CLAUDECORD_SPAWN_TASK="${task}" ${claudecordHome}/scripts/spawn_teammate ${name} ${claudecordHome} --model sonnet`
-      exec(cmd)
+      execFileSync(`${claudecordHome}/scripts/spawn_teammate`, [name, claudecordHome, '--model', 'sonnet'], {
+        timeout: 30000,
+        env: { ...process.env, CLAUDECORD_SPAWN_TASK: task },
+      })
       if (deps.channelManager) {
         try {
           const channelId = await deps.channelManager.createAgentChannel(name, type as AgentType, task)

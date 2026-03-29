@@ -1,6 +1,7 @@
 import express, { type Request, type Response } from 'express'
 import { writeFileSync, renameSync } from 'fs'
 import type { ChannelMessage, AgentReply, AgentSpawnBody, WorkCompletedBody, AgentHeartbeatBody, AgentType, AgentLifecycle, AgentStateEntry } from '../shared/types.js'
+import { validateAgentName } from './channel-manager.js'
 
 let writeQueue: Promise<void> = Promise.resolve()
 
@@ -173,6 +174,10 @@ export function createHttpApi(deps: HttpApiDeps) {
     const body = req.body as Partial<AgentSpawnBody> | undefined
     if (!body?.agentName || typeof body.agentName !== 'string') {
       res.status(400).json({ error: 'agentName required' })
+      return
+    }
+    if (!validateAgentName(body.agentName)) {
+      res.status(400).json({ error: 'agentName must match /^[a-z0-9-]{1,80}$/' })
       return
     }
     if (!body.agentType || !VALID_AGENT_TYPES.has(body.agentType)) {
