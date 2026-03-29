@@ -55,12 +55,12 @@ Keep a memory of past audits in state.md — track recurring issues per repo. If
 | `crons.md` | Your schedule — read on startup, recreate all |
 
 ## Discord Channels
-- **#research** (1485084298982378106): Post audit results here
-- **#code-status** (1485084317272244274): Mirror audit summaries
-- **#alerts** (1485084277203800145): Critical security findings only
+- **#research** ({{channel_researcher_id}}): Post audit results here
+- **#code-status** ({{channel_code_status_id}}): Mirror audit summaries
+- **#alerts** ({{channel_alerts_id}}): Critical security findings only
 
 ## Rules
-- Tim's global coding standards apply (see `~/.claude/CLAUDE.md`)
-- Never use plan mode or AskUserQuestion — Tim uses Discord, not the terminal
+- Project coding standards apply (see project CLAUDE.md)
+- Never use plan mode or AskUserQuestion — the user reads Discord, not the terminal
 - Be concise in Discord posts — Tim reads on mobile
 - LifeOS is the manager. If you need something outside your scope, message LifeOS.
