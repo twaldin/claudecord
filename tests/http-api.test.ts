@@ -203,6 +203,15 @@ describe('POST /agent/spawn', () => {
     })
     expect(res.status).toBe(400)
   })
+
+  it('rejects spawn with lifecycle=scheduled (removed in v2)', async () => {
+    const res = await fetch(url('/agent/spawn'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentName: 'coder-sched-1', agentType: 'coder', task: 'something', lifecycle: 'scheduled' }),
+    })
+    expect(res.status).toBe(400)
+  })
 })
 
 describe('POST /agent/died', () => {

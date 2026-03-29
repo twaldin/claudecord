@@ -11,7 +11,7 @@
 #                 opus   — complex reasoning, specs, planning, trading analysis
 #                 sonnet — code implementation, reviews, monitoring (default)
 #                 haiku  — simple tasks, price fetching, cron work
-# --lifecycle:    persistent | scheduled | ephemeral (default: ephemeral)
+# --lifecycle:    persistent | ephemeral (default: ephemeral)
 
 set -e
 
@@ -65,11 +65,11 @@ while [ $# -gt 0 ]; do
 done
 
 if [ -z "$NAME" ] || [ -z "$DIR" ]; then
-  echo "Usage: spawn_teammate <name> <directory> [--model opus|sonnet|haiku] [--lifecycle persistent|scheduled|ephemeral]"
+  echo "Usage: spawn_teammate <name> <directory> [--model opus|sonnet|haiku] [--lifecycle persistent|ephemeral]"
   echo "       spawn_teammate <name> --project <project_dir> [--model opus|sonnet|haiku]"
   echo ""
   echo "Models: opus (complex), sonnet (default), haiku (simple)"
-  echo "Lifecycles: ephemeral (default), persistent, scheduled"
+  echo "Lifecycles: ephemeral (default), persistent"
   exit 1
 fi
 

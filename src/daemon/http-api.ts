@@ -30,7 +30,7 @@ export interface HttpApiDeps {
 
 const VALID_AGENT_TYPES = new Set(['coder', 'researcher', 'evaluator', 'persistent'])
 const VALID_STATUSES = new Set(['idle', 'working', 'compacting', 'dead'])
-const VALID_LIFECYCLES = new Set<AgentLifecycle>(['persistent', 'scheduled', 'ephemeral'])
+const VALID_LIFECYCLES = new Set<AgentLifecycle>(['persistent', 'ephemeral'])
 
 function isValidModel(m: string): m is 'opus' | 'sonnet' | 'haiku' {
   return m === 'opus' || m === 'sonnet' || m === 'haiku'
@@ -184,10 +184,12 @@ export function createHttpApi(deps: HttpApiDeps) {
       return
     }
 
+    if (body.lifecycle && !VALID_LIFECYCLES.has(body.lifecycle)) {
+      res.status(400).json({ error: `lifecycle must be persistent or ephemeral (got: ${body.lifecycle})` })
+      return
+    }
     const { agentName, agentType, task, issueNumber, prNumber, worktreePath } = body
-    const lifecycle: AgentLifecycle = (body.lifecycle && VALID_LIFECYCLES.has(body.lifecycle))
-      ? body.lifecycle
-      : 'ephemeral'
+    const lifecycle: AgentLifecycle = body.lifecycle ?? 'ephemeral'
     const rawModel = body.model ?? 'sonnet'
     const model: 'opus' | 'sonnet' | 'haiku' = isValidModel(rawModel) ? rawModel : 'sonnet'
     const directory = body.directory ?? worktreePath ?? ''

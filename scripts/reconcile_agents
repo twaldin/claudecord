@@ -74,12 +74,6 @@ while IFS=$'\t' read -r name lifecycle; do
           MODEL=$(echo "$AGENTS_JSON" | jq -r ".agents[] | select(.name == \"$name\") | .model")
           spawn_teammate "$name" "$DIR" --model "$MODEL" --lifecycle persistent || true
           ;;
-        scheduled)
-          echo "  → marking $name dead (scheduled agent outside window)"
-          daemon_curl -X POST "$DAEMON_URL/agent/died" \
-            -H 'Content-Type: application/json' \
-            -d "{\"agentName\":\"$name\"}" || true
-          ;;
         ephemeral)
           echo "  → marking $name dead (ephemeral agent exited)"
           daemon_curl -X POST "$DAEMON_URL/agent/died" \
