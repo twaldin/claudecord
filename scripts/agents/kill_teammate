@@ -45,6 +45,10 @@ curl -sf -X POST "$DAEMON_URL/agent/died" \
 tmux kill-pane -t "$SESSION:$WINDOW.$PANE_INDEX" 2>/dev/null || true
 
 # Mark dead in registry
-sed -i '' "s/^$NAME|$WINDOW|$PANE_INDEX|alive/$NAME|$WINDOW|$PANE_INDEX|dead/" "$REGISTRY"
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  sed -i '' "s/^$NAME|$WINDOW|$PANE_INDEX|alive/$NAME|$WINDOW|$PANE_INDEX|dead/" "$REGISTRY"
+else
+  sed -i "s/^$NAME|$WINDOW|$PANE_INDEX|alive/$NAME|$WINDOW|$PANE_INDEX|dead/" "$REGISTRY"
+fi
 
 echo "Killed $NAME (was pane $WINDOW.$PANE_INDEX)"
