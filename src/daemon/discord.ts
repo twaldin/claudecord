@@ -171,7 +171,7 @@ export function createDiscordClient(deps: DiscordClientDeps) {
 
   async function editBuiltEmbed(channelId: string, messageId: string, embed: EmbedBuilder): Promise<void> {
     const channel = await client.channels.fetch(channelId)
-    if (!channel?.isTextBased() || !('send' in channel)) {
+    if (!channel?.isTextBased() || !('messages' in channel)) {
       throw new Error(`Channel ${channelId} is not a text channel`)
     }
     const message = await channel.messages.fetch(messageId)

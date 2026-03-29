@@ -103,10 +103,18 @@ function makeDeps(dir: string) {
     permissionOverwrites: { create: vi.fn().mockResolvedValue(undefined) },
   }
 
+  const channelCache = new Map<string, typeof mockChannel>([['existing-channel-id', mockChannel]])
   const mockGuild = {
     channels: {
       create: vi.fn().mockResolvedValue(mockChannel),
-      cache: new Map<string, typeof mockChannel>([['existing-channel-id', mockChannel]]),
+      cache: Object.assign(channelCache, {
+        find: (fn: (ch: { name: string; type: number; id: string }) => boolean) => {
+          for (const ch of channelCache.values()) {
+            if (fn(ch as unknown as { name: string; type: number; id: string })) return ch
+          }
+          return undefined
+        },
+      }),
     },
   }
 

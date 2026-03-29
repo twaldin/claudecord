@@ -66,7 +66,7 @@ fi
 
 cat > "$ENV_FILE" << EOF
 # Discord bot token (from Discord Developer Portal)
-DISCORD_TOKEN=${WIZARD_DISCORD_TOKEN}
+DISCORD_BOT_TOKEN=${WIZARD_DISCORD_TOKEN}
 
 # Anthropic API key (for Claude)
 ANTHROPIC_API_KEY=${WIZARD_ANTHROPIC_KEY}

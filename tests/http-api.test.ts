@@ -5,7 +5,7 @@ import { readFileSync, existsSync, unlinkSync } from 'fs'
 import { randomUUID } from 'crypto'
 import { createHttpApi, persistState, flushWrites } from '../src/daemon/http-api.js'
 import type { Server } from 'http'
-import type { AgentReply, ChannelMessage, AgentSpawnBody, WorkCompletedBody, AgentHeartbeatBody, AgentType } from '../src/shared/types.js'
+import type { AgentReply, ChannelMessage, AgentSpawnBody, WorkCompletedBody, AgentHeartbeatBody, AgentType, AgentStateEntry } from '../src/shared/types.js'
 
 let server: Server
 let port: number
@@ -505,5 +505,184 @@ describe('GET /agents', () => {
     const res = await fetch(agentsUrl('/agents'))
     const data = await res.json() as { agents: unknown[] }
     expect(Array.isArray(data.agents)).toBe(true)
+  })
+
+  it('returns full AgentStateEntry for registered agents', async () => {
+    const res = await fetch(agentsUrl('/agents'))
+    const data = await res.json() as { agents: AgentStateEntry[] }
+    const alpha = data.agents.find(a => a.name === 'agent-alpha')
+    expect(alpha).toBeDefined()
+    expect(alpha?.shimConnected).toBe(true)
+    expect(alpha?.status).toBe('alive')
+    expect(typeof alpha?.spawnedAt).toBe('string')
+  })
+})
+
+describe('GET /agents — spawned entry fields', () => {
+  let spawnedServer: Server
+  let spawnedPort: number
+
+  function spawnedUrl(path: string) {
+    return `http://localhost:${spawnedPort}${path}`
+  }
+
+  beforeAll(async () => {
+    const api = createHttpApi({
+      onReply: async () => {},
+      onAgentSpawn: async (data) => ({ channelId: `ch-${data.agentName}` }),
+    })
+    await new Promise<void>((resolve) => {
+      spawnedServer = api.app.listen(0, () => {
+        const addr = spawnedServer.address()
+        if (addr && typeof addr === 'object') spawnedPort = (addr as { port: number }).port
+        resolve()
+      })
+    })
+    await fetch(spawnedUrl('/agent/spawn'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agentName: 'coder-state-test',
+        agentType: 'coder',
+        task: 'Test state entry',
+        lifecycle: 'ephemeral',
+        directory: '/tmp/test',
+        model: 'haiku',
+      }),
+    })
+  })
+
+  afterAll(() => { spawnedServer.close() })
+
+  it('GET /agents returns full AgentStateEntry after spawn', async () => {
+    const res = await fetch(spawnedUrl('/agents'))
+    const data = await res.json() as { agents: AgentStateEntry[] }
+    const entry = data.agents.find(a => a.name === 'coder-state-test')
+    expect(entry).toBeDefined()
+    expect(entry?.lifecycle).toBe('ephemeral')
+    expect(entry?.type).toBe('coder')
+    expect(entry?.status).toBe('alive')
+    expect(entry?.model).toBe('haiku')
+    expect(entry?.directory).toBe('/tmp/test')
+    expect(entry?.task).toBe('Test state entry')
+    expect(entry?.shimConnected).toBe(false)
+    expect(entry?.channelId).toBe('ch-coder-state-test')
+    expect(entry?.diedAt).toBeNull()
+    expect(entry?.contextPct).toBeNull()
+    expect(entry?.agentStatus).toBeNull()
+    expect(entry?.lastHeartbeatAt).toBeNull()
+  })
+})
+
+describe('POST /agent/spawn — duplicate detection', () => {
+  let dupServer: Server
+  let dupPort: number
+
+  function dupUrl(path: string) {
+    return `http://localhost:${dupPort}${path}`
+  }
+
+  beforeAll(async () => {
+    const api = createHttpApi({
+      onReply: async () => {},
+      onAgentSpawn: async (data) => ({ channelId: `ch-${data.agentName}` }),
+    })
+    await new Promise<void>((resolve) => {
+      dupServer = api.app.listen(0, () => {
+        const addr = dupServer.address()
+        if (addr && typeof addr === 'object') dupPort = (addr as { port: number }).port
+        resolve()
+      })
+    })
+    // First spawn succeeds
+    await fetch(dupUrl('/agent/spawn'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentName: 'dup-agent', agentType: 'coder', task: 'first' }),
+    })
+  })
+
+  afterAll(() => { dupServer.close() })
+
+  it('returns 409 when spawning an already-alive agent', async () => {
+    const res = await fetch(dupUrl('/agent/spawn'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentName: 'dup-agent', agentType: 'coder', task: 'second' }),
+    })
+    expect(res.status).toBe(409)
+    const data = await res.json() as { error: string }
+    expect(data.error).toContain('dup-agent')
+  })
+})
+
+describe('POST /agent/died — 404 for unknown agent', () => {
+  let diedServer: Server
+  let diedPort: number
+
+  beforeAll(async () => {
+    const api = createHttpApi({ onReply: async () => {} })
+    await new Promise<void>((resolve) => {
+      diedServer = api.app.listen(0, () => {
+        const addr = diedServer.address()
+        if (addr && typeof addr === 'object') diedPort = (addr as { port: number }).port
+        resolve()
+      })
+    })
+  })
+
+  afterAll(() => { diedServer.close() })
+
+  it('returns 404 when agent is not found', async () => {
+    const res = await fetch(`http://localhost:${diedPort}/agent/died`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentName: 'nonexistent-agent' }),
+    })
+    expect(res.status).toBe(404)
+  })
+})
+
+describe('POST /agent/heartbeat — updates registry entry', () => {
+  let hbServer: Server
+  let hbPort: number
+
+  function hbUrl(path: string) {
+    return `http://localhost:${hbPort}${path}`
+  }
+
+  beforeAll(async () => {
+    const api = createHttpApi({ onReply: async () => {} })
+    await new Promise<void>((resolve) => {
+      hbServer = api.app.listen(0, () => {
+        const addr = hbServer.address()
+        if (addr && typeof addr === 'object') hbPort = (addr as { port: number }).port
+        resolve()
+      })
+    })
+    // Register an agent first so there's an entry to update
+    await fetch(hbUrl('/register'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentName: 'hb-agent' }),
+    })
+  })
+
+  afterAll(() => { hbServer.close() })
+
+  it('updates contextPct, agentStatus, and lastHeartbeatAt in registry', async () => {
+    const before = new Date().toISOString()
+    await fetch(hbUrl('/agent/heartbeat'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentName: 'hb-agent', contextPct: 72, status: 'working' }),
+    })
+    const res = await fetch(hbUrl('/agents'))
+    const data = await res.json() as { agents: AgentStateEntry[] }
+    const entry = data.agents.find(a => a.name === 'hb-agent')
+    expect(entry?.contextPct).toBe(72)
+    expect(entry?.agentStatus).toBe('working')
+    expect(entry?.lastHeartbeatAt).toBeDefined()
+    expect(entry?.lastHeartbeatAt! >= before).toBe(true)
   })
 })

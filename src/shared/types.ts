@@ -1,4 +1,22 @@
 export type AgentType = 'coder' | 'researcher' | 'evaluator' | 'persistent'
+export type AgentLifecycle = 'persistent' | 'scheduled' | 'ephemeral'
+
+export interface AgentStateEntry {
+  name: string
+  lifecycle: AgentLifecycle
+  type: AgentType
+  status: 'alive' | 'dead'
+  directory: string
+  spawnedAt: string
+  diedAt: string | null
+  model: 'opus' | 'sonnet' | 'haiku'
+  channelId: string | null
+  contextPct: number | null
+  agentStatus: 'idle' | 'working' | 'compacting' | 'dead' | null
+  task: string | null
+  shimConnected: boolean
+  lastHeartbeatAt: string | null
+}
 
 export interface AgentChannelMeta {
   agentType: AgentType
@@ -135,6 +153,8 @@ export interface AgentSpawnBody {
   agentName: string
   agentType: AgentType
   task: string
+  lifecycle?: AgentLifecycle
+  directory?: string
   issueNumber?: number
   prNumber?: number
   worktreePath?: string
