@@ -4,15 +4,20 @@
 # Usage: spawn_fix_coder <issue_number> [--model opus|sonnet|haiku]
 #
 # Reads the issue from GitHub, creates a worktree, and spawns a coder with
-# full context. The coder uses the GSD template to implement the fix,
-# create a PR referencing the issue, then message_lifeos and exit.
+# full context. The coder implements the fix, creates a PR, then exits.
+#
+# Required env vars:
+#   PROJECT_DIR    — local path to the project repo (set in .env)
+#   PR_REVIEWER    — GitHub username to assign as reviewer (optional)
 
 set -e
 
 ISSUE="$1"
 MODEL="sonnet"
-REPO_DIR="$HOME/trade-up-bot"
-SESSION="claudecord"
+PROJECT_DIR="${PROJECT_DIR:-}"
+PR_REVIEWER="${PR_REVIEWER:-}"
+CLAUDECORD_HOME="${CLAUDECORD_HOME:-$HOME/claudecord}"
+SESSION="${CLAUDECORD_SESSION:-claudecord}"
 
 # Parse optional --model flag
 shift || true
@@ -28,9 +33,14 @@ if [ -z "$ISSUE" ]; then
   exit 1
 fi
 
+if [ -z "$PROJECT_DIR" ]; then
+  echo "ERROR: PROJECT_DIR environment variable not set (add to .env)"
+  exit 1
+fi
+
 # Fetch issue details
-ISSUE_TITLE=$(cd "$REPO_DIR" && gh issue view "$ISSUE" --json title -q '.title' 2>/dev/null)
-ISSUE_BODY=$(cd "$REPO_DIR" && gh issue view "$ISSUE" --json body -q '.body' 2>/dev/null)
+ISSUE_TITLE=$(cd "$PROJECT_DIR" && gh issue view "$ISSUE" --json title -q '.title' 2>/dev/null)
+ISSUE_BODY=$(cd "$PROJECT_DIR" && gh issue view "$ISSUE" --json body -q '.body' 2>/dev/null)
 
 if [ -z "$ISSUE_TITLE" ]; then
   echo "ERROR: Could not fetch issue #$ISSUE"
@@ -44,22 +54,28 @@ WT_DIR="/tmp/claudecord-wt-fix-${ISSUE}"
 if [ -d "$WT_DIR" ]; then
   echo "Worktree already exists at $WT_DIR — reusing"
 else
-  cd "$REPO_DIR"
+  cd "$PROJECT_DIR"
   git worktree add "$WT_DIR" -b "$BRANCH" main 2>/dev/null || \
     git worktree add "$WT_DIR" "$BRANCH" 2>/dev/null
 fi
 
-# Copy coder template + symlink message_lifeos so agents can use it
-cp "$HOME/claudecord/agents/coder-template-gsd.md" "$WT_DIR/AGENT.md" 2>/dev/null || true
-ln -sf "$HOME/claudecord/scripts/message_lifeos" "$WT_DIR/message_lifeos" 2>/dev/null || true
+# Copy coder template
+cp "$CLAUDECORD_HOME/agents/coder/template.md" "$WT_DIR/AGENT.md" 2>/dev/null || \
+  cp "$CLAUDECORD_HOME/agents/coder-template.md" "$WT_DIR/AGENT.md" 2>/dev/null || true
 
 # Spawn the agent
 AGENT_NAME="coder-fix-${ISSUE}"
-"$HOME/claudecord/scripts/spawn_teammate" "$AGENT_NAME" "$WT_DIR" --model "$MODEL"
+"$CLAUDECORD_HOME/scripts/agents/spawn_teammate" "$AGENT_NAME" "$WT_DIR" --model "$MODEL"
+
+# Build reviewer instruction
+REVIEWER_INSTRUCTION=""
+if [ -n "$PR_REVIEWER" ]; then
+  REVIEWER_INSTRUCTION="5. Assign $PR_REVIEWER as reviewer on the PR"
+fi
 
 # Send task with issue context
 sleep 5
-"$HOME/claudecord/scripts/send_message" "$AGENT_NAME" \
+"$CLAUDECORD_HOME/scripts/agents/send_message" "$AGENT_NAME" \
   "Fix GitHub issue #${ISSUE}: ${ISSUE_TITLE}
 
 Issue description:
@@ -70,9 +86,8 @@ Instructions:
 2. Implement the fix using GSD workflow (/gsd:fast for small fixes)
 3. Run tests to verify
 4. Create a PR with 'Fixes #${ISSUE}' in the body
-5. Assign twaldin as reviewer on the PR
-6. Post to #code-status (1485084317272244274) via claudecord_reply
-7. Message LifeOS: message_lifeos 'Fix for issue #${ISSUE} complete. PR #X. Summary.'
-8. /exit"
+${REVIEWER_INSTRUCTION}
+6. Message orchestrator: message_orchestrator 'Fix for issue #${ISSUE} complete. PR created.'
+7. /exit"
 
 echo "Spawned $AGENT_NAME for issue #$ISSUE"

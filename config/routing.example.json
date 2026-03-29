@@ -1,0 +1,24 @@
+{
+  "_comment": "Map Discord channel IDs to agent names. Copy this to routing.json and fill in your channel IDs.",
+  "_howto": "Enable Developer Mode in Discord (Settings → Advanced), then right-click a channel → Copy ID.",
+  "agents": {
+    "orchestrator": {
+      "channels": [
+        "000000000000000001",
+        "000000000000000002",
+        "000000000000000003"
+      ]
+    },
+    "evaluator": {
+      "channels": [
+        "000000000000000004"
+      ]
+    },
+    "researcher": {
+      "channels": [
+        "000000000000000005"
+      ]
+    }
+  },
+  "defaultAgent": "orchestrator"
+}

@@ -4,7 +4,7 @@
       "command": "{{claudecord_home}}/node_modules/.bin/tsx",
       "args": ["{{claudecord_home}}/src/shim/index.ts"],
       "env": {
-        "CLAUDECORD_AGENT_NAME": "trader",
+        "CLAUDECORD_AGENT_NAME": "evaluator",
         "CLAUDECORD_DAEMON_URL": "http://localhost:19532",
         "CLAUDECORD_API_SECRET": ""
       }

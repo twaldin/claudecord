@@ -6,6 +6,7 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
+    "dev": "tsx src/daemon/index.ts",
     "daemon": "tsx src/daemon/index.ts",
     "shim": "tsx src/shim/index.ts",
     "build": "tsc",

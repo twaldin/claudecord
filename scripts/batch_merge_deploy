@@ -1,17 +1,34 @@
 #!/bin/bash
-# batch_merge_deploy — Merge approved PRs and deploy to VPS
+# batch_merge_deploy — Merge approved PRs and deploy to a remote server
 #
 # Usage: batch_merge_deploy [pr_numbers...]
 #        batch_merge_deploy --approved    (merge all approved PRs)
 #
-# Merges PRs to main, pulls on VPS, runs npm install + vite build + pm2 restart.
+# Merges PRs to main, then runs the configured deploy command.
+#
+# Required env vars (set in .env):
+#   DEPLOY_REPO_DIR   — local path to the project repo
+#   DEPLOY_VPS        — SSH target (e.g. user@host)
+#   DEPLOY_VPS_DIR    — remote directory to deploy to
+#   DEPLOY_RESTART    — command to restart the service (e.g. "pm2 restart all")
 
 set -e
 
-REPO_DIR="$HOME/trade-up-bot"
-VPS="root@178.156.239.58"
-VPS_DIR="/root/trade-up-bot"
+REPO_DIR="${DEPLOY_REPO_DIR:-}"
+VPS="${DEPLOY_VPS:-}"
+VPS_DIR="${DEPLOY_VPS_DIR:-}"
+RESTART_CMD="${DEPLOY_RESTART:-pm2 restart all}"
 PR_LIST=()
+
+if [ -z "$REPO_DIR" ]; then
+  echo "ERROR: DEPLOY_REPO_DIR not set (add to .env)"
+  exit 1
+fi
+
+if [ -z "$VPS" ] || [ -z "$VPS_DIR" ]; then
+  echo "ERROR: DEPLOY_VPS and DEPLOY_VPS_DIR must be set in .env"
+  exit 1
+fi
 
 cd "$REPO_DIR"
 
@@ -51,18 +68,10 @@ fi
 
 echo ""
 echo "Merged ${#MERGED[@]} PRs: ${MERGED[*]}"
-echo "Deploying to VPS..."
+echo "Deploying to $VPS..."
 
-# Deploy to VPS
-ssh -o ConnectTimeout=10 "$VPS" bash -s <<'DEPLOY'
-cd /root/trade-up-bot
-git pull origin main
-npm install
-npx vite build 2>/dev/null || true
-pm2 restart all
-echo "Deploy complete. PM2 status:"
-pm2 list
-DEPLOY
+# Deploy to remote server
+ssh -o ConnectTimeout=10 "$VPS" "cd $VPS_DIR && git pull origin main && npm install && $RESTART_CMD"
 
 echo ""
 echo "Deploy complete. Merged PRs: ${MERGED[*]}"

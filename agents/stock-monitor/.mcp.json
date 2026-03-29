@@ -1,12 +1,12 @@
 {
   "mcpServers": {
     "claudecord": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["tsx", "/Users/twaldin/claudecord/src/shim/index.ts"],
+      "command": "{{claudecord_home}}/node_modules/.bin/tsx",
+      "args": ["{{claudecord_home}}/src/shim/index.ts"],
       "env": {
         "CLAUDECORD_AGENT_NAME": "stock-monitor",
-        "CLAUDECORD_ROUTER_PORT": "19532"
+        "CLAUDECORD_DAEMON_URL": "http://localhost:19532",
+        "CLAUDECORD_API_SECRET": ""
       }
     }
   }
