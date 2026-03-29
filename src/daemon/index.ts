@@ -121,7 +121,8 @@ async function main() {
       }
     },
     onAgentSpawn: async (data) => {
-      if (!channelManager) return { channelId: '' }
+      // Persistent agents use pre-configured channels from routing.json — don't create new ones
+      if (!channelManager || data.lifecycle === 'persistent') return { channelId: '' }
       const channelId = await channelManager.createAgentChannel(data.agentName, data.agentType, data.task)
       return { channelId }
     },
