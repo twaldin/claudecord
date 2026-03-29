@@ -19,7 +19,7 @@ afterEach(() => {
 
 describe('addAgentChannel', () => {
   it('adds a new agent entry and resolves its channel', () => {
-    const config: RoutingConfig = { agents: {}, defaultAgent: 'lifeos' }
+    const config: RoutingConfig = { agents: {}, defaultAgent: 'orchestrator' }
     const meta: AgentChannelMeta = { agentType: 'coder', spawnedAt: '2026-03-28T12:00:00.000Z', task: 'Fix bug' }
     addAgentChannel(config, 'coder-fix-49', 'ch-99', meta, routingPath)
     expect(resolveAgent(config, 'ch-99')).toBe('coder-fix-49')
@@ -74,23 +74,23 @@ describe('removeAgentChannel', () => {
     const config: RoutingConfig = {
       agents: {
         'coder-fix-49': { channels: ['ch-99'] },
-        lifeos: { channels: ['ch-1'] },
+        orchestrator: { channels: ['ch-1'] },
       },
     }
     removeAgentChannel(config, 'coder-fix-49', routingPath)
-    expect(resolveAgent(config, 'ch-1')).toBe('lifeos')
+    expect(resolveAgent(config, 'ch-1')).toBe('orchestrator')
   })
 })
 
 describe('saveRouting', () => {
   it('writes config to disk and it round-trips correctly', () => {
     const config: RoutingConfig = {
-      agents: { lifeos: { channels: ['111', '222'] } },
-      defaultAgent: 'lifeos',
+      agents: { orchestrator: { channels: ['111', '222'] } },
+      defaultAgent: 'orchestrator',
     }
     saveRouting(config, routingPath)
     const loaded = loadRouting(routingPath)
-    expect(loaded.agents['lifeos']?.channels).toContain('111')
-    expect(loaded.defaultAgent).toBe('lifeos')
+    expect(loaded.agents['orchestrator']?.channels).toContain('111')
+    expect(loaded.defaultAgent).toBe('orchestrator')
   })
 })
