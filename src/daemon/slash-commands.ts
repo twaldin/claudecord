@@ -302,7 +302,7 @@ async function handleCommand(
       const label = list.length > 0 ? list.join(', ') : '(none)'
       try {
         const claudecordHome = getClaudecordHome()
-        execSync(`${claudecordHome}/scripts/send_message lifeos "Mark habits: ${label.replace(/"/g, '\\"')}"`, { timeout: 10000 })
+        execSync(`${claudecordHome}/scripts/agents/send_message orchestrator "Mark habits: ${label.replace(/"/g, '\\"')}"`, { timeout: 10000 })
       } catch {
         // non-critical — still confirm to user
       }
