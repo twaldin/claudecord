@@ -237,11 +237,12 @@ async function main() {
     const statusBoard = createStatusBoard({
       sendEmbed: discord.sendBuiltEmbed,
       editMessage: discord.editBuiltEmbed,
+      fetchRecentBotEmbed: discord.fetchRecentBotEmbed,
       channelId: process.env['DISCORD_STATUS_CHANNEL_ID'],
       getSnapshot: buildSnapshot,
       intervalMs: 60000,
     })
-    statusBoard.start()
+    void statusBoard.start()
     console.log('[daemon] Status board started')
   }
 
