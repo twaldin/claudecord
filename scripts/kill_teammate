@@ -4,9 +4,14 @@
 
 set -e
 
+# Source .env for API secret
+CLAUDECORD_HOME="${CLAUDECORD_HOME:-$HOME/claudecord}"
+if [ -f "$CLAUDECORD_HOME/.env" ]; then
+  set -a; source "$CLAUDECORD_HOME/.env"; set +a
+fi
+
 NAME="$1"
 SESSION="claudecord"
-REGISTRY="$HOME/claudecord/registry.tsv"
 
 if [ -z "$NAME" ]; then
   echo "Usage: kill_teammate <name>"
@@ -18,20 +23,19 @@ if [ "$NAME" = "lifeos" ]; then
   exit 1
 fi
 
-ENTRY=$(grep "^$NAME|.*|alive" "$REGISTRY" 2>/dev/null | tail -1)
-if [ -z "$ENTRY" ]; then
-  echo "ERROR: teammate '$NAME' not found or not alive"
-  exit 1
+DAEMON_URL="${CLAUDECORD_DAEMON_URL:-http://localhost:19532}"
+DIED_RESPONSE=$(curl -sf -X POST "$DAEMON_URL/agent/died" \
+  -H "Content-Type: application/json" \
+  ${CLAUDECORD_API_SECRET:+-H "Authorization: Bearer $CLAUDECORD_API_SECRET"} \
+  -d "{\"agentName\":\"$NAME\"}" \
+  2>/dev/null || echo '{}')
+
+# Check for 404 (not found in registry) — still kill the window if it exists
+if echo "$DIED_RESPONSE" | grep -q '"error"'; then
+  echo "WARNING: daemon reported error for $NAME — proceeding with tmux kill anyway"
 fi
 
-# Registry format: name|window|pane|status|dir|spawned
-WINDOW=$(echo "$ENTRY" | cut -d'|' -f2)
-PANE_INDEX=$(echo "$ENTRY" | cut -d'|' -f3)
+# Kill the window
+tmux kill-window -t "$SESSION:$NAME" 2>/dev/null || true
 
-# Kill the pane
-tmux kill-pane -t "$SESSION:$WINDOW.$PANE_INDEX" 2>/dev/null || true
-
-# Mark dead in registry
-sed -i '' "s/^$NAME|$WINDOW|$PANE_INDEX|alive/$NAME|$WINDOW|$PANE_INDEX|dead/" "$REGISTRY"
-
-echo "Killed $NAME (was pane $WINDOW.$PANE_INDEX)"
+echo "Killed $NAME"

@@ -1,8 +1,8 @@
 #!/bin/bash
-# spawn_teammate — Spawn a new Claude Code agent in a tmux pane
+# spawn_teammate — Spawn a new Claude Code agent in a named tmux window
 #
 # Usage:
-#   spawn_teammate <name> <directory> [--model opus|sonnet|haiku]
+#   spawn_teammate <name> <directory> [--model opus|sonnet|haiku] [--lifecycle persistent|scheduled|ephemeral]
 #   spawn_teammate <name> --project <project_dir> [--model opus|sonnet|haiku]
 #
 # Agent dir mode: launches claude in the given directory with its own CLAUDE.md + .mcp.json
@@ -11,18 +11,27 @@
 #                 opus   — complex reasoning, specs, planning, trading analysis
 #                 sonnet — code implementation, reviews, monitoring (default)
 #                 haiku  — simple tasks, price fetching, cron work
+# --lifecycle:    persistent | scheduled | ephemeral (default: ephemeral)
 
 set -e
 
+# Source .env for API secret (needed for daemon curl calls)
+CLAUDECORD_HOME="${CLAUDECORD_HOME:-$HOME/claudecord}"
+if [ -f "$CLAUDECORD_HOME/.env" ]; then
+  set -a; source "$CLAUDECORD_HOME/.env"; set +a
+fi
+
 NAME="$1"
 SESSION="claudecord"
-REGISTRY="$HOME/claudecord/registry.tsv"
 MODEL="sonnet"  # default
+LIFECYCLE="ephemeral"  # default
 
 # Parse args
 shift
 MODE="agent"
 DIR=""
+TASK_DESC=""
+AGENT_TYPE="coder"
 while [ $# -gt 0 ]; do
   case "$1" in
     --project)
@@ -32,6 +41,18 @@ while [ $# -gt 0 ]; do
       ;;
     --model)
       MODEL="$2"
+      shift 2
+      ;;
+    --task)
+      TASK_DESC="$2"
+      shift 2
+      ;;
+    --lifecycle)
+      LIFECYCLE="$2"
+      shift 2
+      ;;
+    --type)
+      AGENT_TYPE="$2"
       shift 2
       ;;
     *)
@@ -44,10 +65,11 @@ while [ $# -gt 0 ]; do
 done
 
 if [ -z "$NAME" ] || [ -z "$DIR" ]; then
-  echo "Usage: spawn_teammate <name> <directory> [--model opus|sonnet|haiku]"
+  echo "Usage: spawn_teammate <name> <directory> [--model opus|sonnet|haiku] [--lifecycle persistent|scheduled|ephemeral]"
   echo "       spawn_teammate <name> --project <project_dir> [--model opus|sonnet|haiku]"
   echo ""
   echo "Models: opus (complex), sonnet (default), haiku (simple)"
+  echo "Lifecycles: ephemeral (default), persistent, scheduled"
   exit 1
 fi
 
@@ -63,19 +85,6 @@ if ! tmux has-session -t "$SESSION" 2>/dev/null; then
   exit 1
 fi
 
-# Check if already running (registry format: name|window|pane|status|dir|spawned)
-if grep -q "^$NAME|.*|alive" "$REGISTRY" 2>/dev/null; then
-  EXISTING_WIN=$(grep "^$NAME|.*|alive" "$REGISTRY" | tail -1 | cut -d'|' -f2)
-  EXISTING_PANE=$(grep "^$NAME|.*|alive" "$REGISTRY" | tail -1 | cut -d'|' -f3)
-  if tmux list-panes -t "$SESSION:$EXISTING_WIN" -F '#{pane_index}' 2>/dev/null | grep -q "^$EXISTING_PANE$"; then
-    echo "WARNING: $NAME already alive in pane $EXISTING_WIN.$EXISTING_PANE"
-    exit 0
-  fi
-fi
-
-# Get the active window index (agent will live in this window)
-WINDOW=$(tmux display-message -t "$SESSION" -p '#{window_index}')
-
 # Build the claude command based on mode + model
 MODEL_FLAG="--model $MODEL"
 if [ "$MODE" = "worktree" ]; then
@@ -84,19 +93,38 @@ else
   CLAUDE_CMD="claude --dangerously-load-development-channels server:claudecord --dangerously-skip-permissions $MODEL_FLAG"
 fi
 
-# Create new pane with CLAUDECORD_AGENT_NAME exported so all scripts inherit it
-PANE_INDEX=$(tmux split-window -t "$SESSION:$WINDOW" -h -P -F '#{pane_index}' \
-  -c "$DIR" \
-  "export CLAUDECORD_AGENT_NAME='$NAME'; export PATH=\"$HOME/claudecord/scripts:\$PATH\"; $CLAUDE_CMD 2>&1; echo '[AGENT $NAME EXITED]'; read")
-
-# Title the pane for identification
-tmux select-pane -t "$SESSION:$WINDOW.$PANE_INDEX" -T "$NAME"
+# Create new named window — each agent gets its own window
+tmux new-window -t "$SESSION" -n "$NAME" -c "$DIR" \
+  "export CLAUDECORD_AGENT_NAME='$NAME'; export PATH=\"$HOME/claudecord/scripts:\$PATH\"; $CLAUDE_CMD 2>&1; echo '[AGENT $NAME EXITED]'; read"
 
 # Auto-confirm prompts (dev channels or worktree)
 sleep 3
-tmux send-keys -t "$SESSION:$WINDOW.$PANE_INDEX" Enter
+tmux send-keys -t "$SESSION:$NAME" Enter
 
-# Register (format: name|window|pane|status|directory|spawned_at)
-echo "$NAME|$WINDOW|$PANE_INDEX|alive|$DIR|$(date -Iseconds)" >> "$REGISTRY"
+# Send task as first prompt if provided
+if [ -n "$TASK_DESC" ]; then
+  sleep 2
+  tmux send-keys -t "$SESSION:$NAME" "$TASK_DESC" Enter
+fi
 
-echo "Spawned $NAME ($MODE mode, $MODEL) in pane $WINDOW.$PANE_INDEX at $DIR"
+# Register with daemon (no registry.tsv write)
+DAEMON_URL="${CLAUDECORD_DAEMON_URL:-http://localhost:19532}"
+SPAWN_RESPONSE=$(curl -sf -X POST "$DAEMON_URL/agent/spawn" \
+  -H "Content-Type: application/json" \
+  ${CLAUDECORD_API_SECRET:+-H "Authorization: Bearer $CLAUDECORD_API_SECRET"} \
+  -d "{\"agentName\":\"$NAME\",\"agentType\":\"$AGENT_TYPE\",\"lifecycle\":\"$LIFECYCLE\",\"task\":\"${TASK_DESC:-spawned}\",\"directory\":\"$DIR\",\"model\":\"$MODEL\"}" \
+  2>/dev/null || echo '{"ok":false}')
+
+CHANNEL_ID=""
+if command -v jq >/dev/null 2>&1; then
+  CHANNEL_ID=$(echo "$SPAWN_RESPONSE" | jq -r '.channelId // ""' 2>/dev/null || true)
+fi
+
+if [ -n "$CHANNEL_ID" ] && [ "$CHANNEL_ID" != "null" ] && [ "$CHANNEL_ID" != "" ]; then
+  echo "Spawned $NAME ($LIFECYCLE, $MODEL) at $DIR — channel: $CHANNEL_ID"
+else
+  echo "Spawned $NAME ($LIFECYCLE, $MODEL) at $DIR"
+  if echo "$SPAWN_RESPONSE" | grep -q '"ok":false'; then
+    echo "WARNING: daemon unreachable — agent spawned without channel"
+  fi
+fi

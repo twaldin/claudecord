@@ -3,39 +3,59 @@
 # Usage: list_teammates
 
 SESSION="claudecord"
-REGISTRY="$HOME/claudecord/registry.tsv"
+DAEMON_URL="${CLAUDECORD_DAEMON_URL:-http://localhost:19532}"
 
-if [ ! -f "$REGISTRY" ]; then
-  echo "No registry found at $REGISTRY"
+# Source .env for API secret
+CLAUDECORD_HOME="${CLAUDECORD_HOME:-$HOME/claudecord}"
+if [ -f "$CLAUDECORD_HOME/.env" ]; then
+  set -a; source "$CLAUDECORD_HOME/.env"; set +a
+fi
+
+daemon_curl() {
+  if [ -n "$CLAUDECORD_API_SECRET" ]; then
+    curl -sf -H "Authorization: Bearer $CLAUDECORD_API_SECRET" "$@"
+  else
+    curl -sf "$@"
+  fi
+}
+
+AGENTS_JSON=$(daemon_curl "$DAEMON_URL/agents" 2>/dev/null)
+if [ -z "$AGENTS_JSON" ]; then
+  echo "ERROR: daemon unreachable at $DAEMON_URL"
   exit 1
 fi
 
 echo "=== Claudecord Agent Team ==="
 echo ""
-printf "%-15s %-8s %-8s %-40s %s\n" "NAME" "WIN.PANE" "STATUS" "DIRECTORY" "SPAWNED"
-printf "%-15s %-8s %-8s %-40s %s\n" "----" "--------" "------" "---------" "-------"
+printf "%-20s %-12s %-12s %-8s %-6s %s\n" "NAME" "LIFECYCLE" "STATUS" "ALIVE" "CTX%" "CHANNEL"
+printf "%-20s %-12s %-12s %-8s %-6s %s\n" "----" "---------" "------" "-----" "----" "-------"
 
-while IFS='|' read -r name win pane status dir spawned; do
-  # Skip header
-  [[ "$name" == \#* ]] && continue
-  [ -z "$name" ] && continue
-
-  # Check if pane is actually alive (verify window:pane exists AND has a claude process)
-  ACTUAL_STATUS="$status"
-  if [ "$status" = "alive" ]; then
-    if ! tmux list-panes -t "$SESSION:$win" -F '#{pane_index}' 2>/dev/null | grep -q "^$pane$"; then
-      ACTUAL_STATUS="DEAD"
-    else
-      # Check if claude is actually running in this pane
-      PANE_PID=$(tmux display-message -t "$SESSION:$win.$pane" -p '#{pane_pid}' 2>/dev/null)
-      if [ -n "$PANE_PID" ] && ! pgrep -P "$PANE_PID" -f "claude" >/dev/null 2>&1; then
-        ACTUAL_STATUS="EXITED"
+if command -v jq >/dev/null 2>&1; then
+  echo "$AGENTS_JSON" | jq -r '.agents[] | [
+    .name,
+    (.lifecycle // "?"),
+    (.agentStatus // "unknown"),
+    .status,
+    (if .contextPct == null then "-" else (.contextPct | tostring) + "%" end),
+    (.channelId // "-")
+  ] | @tsv' | while IFS=$'\t' read -r name lifecycle agent_status status ctx_pct channel_id; do
+    # Check tmux liveness for alive agents
+    TMUX_STATUS="?"
+    if [ "$status" = "alive" ]; then
+      if tmux list-windows -t "$SESSION" -F '#{window_name}' 2>/dev/null | grep -q "^$name$"; then
+        TMUX_STATUS="yes"
+      else
+        TMUX_STATUS="no"
       fi
+    else
+      TMUX_STATUS="-"
     fi
-  fi
-
-  printf "%-15s %-8s %-8s %-40s %s\n" "$name" "$win.$pane" "$ACTUAL_STATUS" "$dir" "$spawned"
-done < "$REGISTRY"
+    printf "%-20s %-12s %-12s %-8s %-6s %s\n" "$name" "$lifecycle" "$agent_status" "$TMUX_STATUS" "$ctx_pct" "$channel_id"
+  done
+else
+  echo "WARNING: jq not installed — showing raw JSON"
+  echo "$AGENTS_JSON"
+fi
 
 echo ""
-echo "Total panes: $(tmux list-panes -t "$SESSION" 2>/dev/null | wc -l | tr -d ' ')"
+echo "Total windows: $(tmux list-windows -t "$SESSION" 2>/dev/null | wc -l | tr -d ' ')"
