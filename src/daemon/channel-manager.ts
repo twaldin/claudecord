@@ -123,8 +123,9 @@ export function createChannelManager(deps: ChannelManagerDeps): ChannelManager {
     const embed = buildSpawnEmbed({ agentName, agentType, task, spawnedAt, channelName: agentName })
     await sendEmbed(channel.id, embed)
 
-    const meta: AgentChannelMeta = { agentType, spawnedAt, task }
-    addAgentChannel(routingConfig, agentName, channel.id, meta, routingPath)
+    // Note: routing.json is read-only at runtime per Core Spec v1.
+    // Ephemeral channel routing is derived from agent-state.json via the daemon's in-memory registry.
+    // The channel ID is stored in the agent's AgentStateEntry by the spawn handler in index.ts.
 
     state = [...state, { channelId: channel.id, agentName, agentType, status: 'active', spawnedAt }]
     saveChannelState(state, statePath)

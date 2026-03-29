@@ -171,11 +171,11 @@ describe('createAgentChannel', () => {
     expect(mockSendEmbed).toHaveBeenCalledWith('new-channel-id', expect.anything())
   })
 
-  it('updates routing config with new channel', async () => {
+  it('does NOT mutate routing.json (ephemeral routing is in agent-state)', async () => {
     const { deps, routingConfig } = makeDeps(tmpDir)
     const manager = createChannelManager(deps)
     await manager.createAgentChannel('coder-fix-49', 'coder', 'Fix bug')
-    expect(routingConfig.agents['coder-fix-49']?.channels).toContain('new-channel-id')
+    expect(routingConfig.agents['coder-fix-49']).toBeUndefined()
   })
 
   it('saves channel lifecycle to state file', async () => {
