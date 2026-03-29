@@ -2,7 +2,7 @@
 # reconcile_registry — Sync registry with actual tmux state
 #
 # Run at session boot to find agents that survived compaction
-# or detect stale entries that reference dead panes.
+# or detect stale entries that reference dead windows.
 #
 # Usage: reconcile_registry [--fix]
 #   Without --fix: report only (dry run)
@@ -31,48 +31,46 @@ echo ""
 CHANGES=0
 
 # Check each registry entry against reality
-while IFS='|' read -r name win pane status dir spawned; do
+while IFS='|' read -r name status dir spawned; do
   [[ "$name" == \#* ]] && continue
   [ -z "$name" ] && continue
 
   if [ "$status" = "alive" ]; then
-    # Check if pane exists
-    if ! tmux list-panes -t "$SESSION:$win" -F '#{pane_index}' 2>/dev/null | grep -q "^$pane$"; then
-      echo "STALE: $name registered as alive at $win.$pane but pane is gone"
+    # Check if window exists
+    if ! tmux list-windows -t "$SESSION" -F '#{window_name}' 2>/dev/null | grep -q "^$name$"; then
+      echo "STALE: $name registered as alive but window is gone"
       if [ "$FIX" = "--fix" ]; then
-        sed_inplace "s/^$name|$win|$pane|alive/$name|$win|$pane|dead/" "$REGISTRY"
+        sed_inplace "s/^$name|alive|/$name|dead|/" "$REGISTRY"
         echo "  → marked dead"
       fi
       CHANGES=$((CHANGES + 1))
     else
       # Check if claude is running
-      PANE_PID=$(tmux display-message -t "$SESSION:$win.$pane" -p '#{pane_pid}' 2>/dev/null)
+      PANE_PID=$(tmux display-message -t "$SESSION:$name" -p '#{pane_pid}' 2>/dev/null)
       if [ -n "$PANE_PID" ] && pgrep -P "$PANE_PID" -f "claude" >/dev/null 2>&1; then
-        echo "OK: $name alive at $win.$pane (claude running)"
+        echo "OK: $name alive in window $name (claude running)"
       else
-        echo "EXITED: $name at $win.$pane — pane exists but claude not running"
+        echo "EXITED: $name — window exists but claude not running"
         CHANGES=$((CHANGES + 1))
       fi
     fi
   fi
 done < "$REGISTRY"
 
-# Scan for unregistered claude agents in tmux
+# Scan for unregistered claude agents in tmux windows
 echo ""
 echo "--- Scanning for unregistered agents ---"
-for win in $(tmux list-windows -t "$SESSION" -F '#{window_index}' 2>/dev/null); do
-  for pane in $(tmux list-panes -t "$SESSION:$win" -F '#{pane_index}' 2>/dev/null); do
-    PANE_PID=$(tmux display-message -t "$SESSION:$win.$pane" -p '#{pane_pid}' 2>/dev/null)
-    if [ -n "$PANE_PID" ] && pgrep -P "$PANE_PID" -f "claude" >/dev/null 2>&1; then
-      # Check if registered
-      if ! grep -q "|$win|$pane|alive" "$REGISTRY" 2>/dev/null; then
-        TITLE=$(tmux display-message -t "$SESSION:$win.$pane" -p '#{pane_title}' 2>/dev/null)
-        echo "UNREGISTERED: claude running at $win.$pane — title: $TITLE"
-        CHANGES=$((CHANGES + 1))
-      fi
+while IFS=' ' read -r win_name win_index; do
+  [ -z "$win_name" ] && continue
+  PANE_PID=$(tmux display-message -t "$SESSION:$win_name" -p '#{pane_pid}' 2>/dev/null)
+  if [ -n "$PANE_PID" ] && pgrep -P "$PANE_PID" -f "claude" >/dev/null 2>&1; then
+    # Check if registered
+    if ! grep -q "^$win_name|alive|" "$REGISTRY" 2>/dev/null; then
+      echo "UNREGISTERED: claude running in window '$win_name'"
+      CHANGES=$((CHANGES + 1))
     fi
-  done
-done
+  fi
+done < <(tmux list-windows -t "$SESSION" -F '#{window_name} #{window_index}' 2>/dev/null)
 
 # Auto-prune dead entries
 DEAD_COUNT=$(grep -c '|dead|' "$REGISTRY" 2>/dev/null || echo 0)
