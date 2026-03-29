@@ -182,7 +182,7 @@ kill_teammate <name>
 
 **Step 1 — Script validation**
 - `name` is non-empty
-- Name is not the orchestrator (`lifeos` or the configured orchestrator name)
+- Name is not the orchestrator (configured orchestrator name, default: `orchestrator`)
 
 **Step 2 — Notify daemon**
 ```http
@@ -270,7 +270,7 @@ scripts/message_orchestrator "<message>"
   → tmux send-keys -t claudecord:<orchestratorWindow> "<message>" Enter
 ```
 
-The orchestrator window name is configured in the script (default: first window / `lifeos`).
+The orchestrator window name is configured in the script (default: `orchestrator`).
 
 ### 4.5 Heartbeat (Shim → Daemon)
 

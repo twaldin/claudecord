@@ -50,7 +50,7 @@ Spawned for a single task. Dies when the task is complete.
 
 **Examples:** coder-fix-54, researcher-spacex, evaluator
 
-**Spawn:** An orchestrator (e.g., lifeos) calls `spawn_teammate` for a specific task.
+**Spawn:** The orchestrator calls `spawn_teammate` for a specific task.
 
 **Death:** Agent completes task, runs the completion protocol, then `/exit`.
 
