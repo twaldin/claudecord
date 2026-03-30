@@ -1,0 +1,22 @@
+{
+  "name": "claudecord",
+  "displayName": "Claudecord",
+  "shortDescription": "Give your agents Discord channels. Talk to your team from your phone.",
+  "longDescription": "Claudecord bridges Discord and your tmux-orchestrator agent team. Each agent gets a Discord channel. Messages route automatically. Agents reply via a simple script. Ephemeral channels are created on agent spawn and archived on kill. Requires tmux-orchestrator.",
+  "category": "communication",
+  "tags": ["discord", "multi-agent", "tmux", "mobile", "messaging", "orchestration"],
+  "skills": [
+    {
+      "name": "discord-setup",
+      "displayName": "Discord Setup",
+      "description": "Interactive setup wizard: bot token, guild ID, channel routing"
+    }
+  ],
+  "requirements": {
+    "plugins": ["tmux-orchestrator"],
+    "tools": ["bun", "tmux"],
+    "optional": ["curl"]
+  },
+  "screenshots": [],
+  "repository": "https://github.com/twaldin/claudecord"
+}

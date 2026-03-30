@@ -1,0 +1,13 @@
+{
+  "name": "claudecord",
+  "version": "0.1.0",
+  "description": "Give your agents Discord channels. Routes Discord messages to tmux agents and back.",
+  "author": {
+    "name": "Tim Waldin",
+    "email": "timothy@waldin.net"
+  },
+  "homepage": "https://github.com/twaldin/claudecord",
+  "repository": "https://github.com/twaldin/claudecord",
+  "license": "MIT",
+  "keywords": ["discord", "multi-agent", "tmux", "orchestration", "messaging"]
+}
