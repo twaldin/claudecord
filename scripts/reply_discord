@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# reply_discord — send a message to a Discord channel via claudecord
+#
+# Usage:
+#   reply_discord "message text"
+#   reply_discord "message text" --channel CHANNEL_ID
+#   reply_discord "message text" --reply-to MESSAGE_ID
+#
+# The channel defaults to the one registered for this agent in the claudecord
+# HTTP side-channel registry. Use --channel to override.
+#
+# This script is designed to be called from agent sessions that do NOT load
+# the claudecord plugin directly. It HTTP POSTs to the orchestrator's MCP
+# server side-channel on localhost.
+
+set -euo pipefail
+
+CLAUDECORD_PORT="${CLAUDECORD_HTTP_PORT:-19532}"
+CLAUDECORD_URL="http://127.0.0.1:${CLAUDECORD_PORT}/reply"
+
+# ---- Parse args ------------------------------------------------------------
+
+MESSAGE=""
+CHANNEL_ID=""
+REPLY_TO=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --channel)
+      CHANNEL_ID="$2"
+      shift 2
+      ;;
+    --reply-to)
+      REPLY_TO="$2"
+      shift 2
+      ;;
+    --channel=*)
+      CHANNEL_ID="${1#--channel=}"
+      shift
+      ;;
+    --reply-to=*)
+      REPLY_TO="${1#--reply-to=}"
+      shift
+      ;;
+    *)
+      if [[ -z "$MESSAGE" ]]; then
+        MESSAGE="$1"
+      fi
+      shift
+      ;;
+  esac
+done
+
+if [[ -z "$MESSAGE" ]]; then
+  echo "reply_discord: message required" >&2
+  echo "Usage: reply_discord \"message\" [--channel CHANNEL_ID] [--reply-to MESSAGE_ID]" >&2
+  exit 1
+fi
+
+# ---- Resolve channel ID if not given --------------------------------------
+
+if [[ -z "$CHANNEL_ID" ]]; then
+  # Try CLAUDECORD_CHANNEL_ID env var (set by spawn_teammate when claudecord active)
+  CHANNEL_ID="${CLAUDECORD_CHANNEL_ID:-}"
+fi
+
+if [[ -z "$CHANNEL_ID" ]]; then
+  echo "reply_discord: no channel ID. Set CLAUDECORD_CHANNEL_ID or pass --channel." >&2
+  exit 1
+fi
+
+# ---- Build JSON payload ---------------------------------------------------
+
+# Escape text for JSON
+escape_json() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\r'/\\r}"
+  s="${s//$'\t'/\\t}"
+  printf '%s' "$s"
+}
+
+ESCAPED_MSG=$(escape_json "$MESSAGE")
+PAYLOAD="{\"channelId\":\"${CHANNEL_ID}\",\"text\":\"${ESCAPED_MSG}\""
+if [[ -n "$REPLY_TO" ]]; then
+  PAYLOAD="${PAYLOAD},\"replyTo\":\"${REPLY_TO}\""
+fi
+PAYLOAD="${PAYLOAD}}"
+
+# ---- POST to claudecord HTTP side-channel ---------------------------------
+
+RESPONSE=$(curl -s -w "\n%{http_code}" \
+  -X POST "${CLAUDECORD_URL}" \
+  -H "Content-Type: application/json" \
+  -d "${PAYLOAD}" 2>/dev/null) || {
+  echo "reply_discord: failed to connect to claudecord on port ${CLAUDECORD_PORT}" >&2
+  echo "  Is the orchestrator session running with claudecord enabled?" >&2
+  exit 1
+}
+
+HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+BODY=$(echo "$RESPONSE" | head -n -1)
+
+if [[ "$HTTP_CODE" != "200" ]]; then
+  echo "reply_discord: server error ${HTTP_CODE}: ${BODY}" >&2
+  exit 1
+fi

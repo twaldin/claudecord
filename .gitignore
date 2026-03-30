@@ -15,3 +15,9 @@ channel-state.json
 stats.json
 registry.tsv
 heartbeat.log
+
+# Plugin data (stored in ~/.claudecord/, not the repo)
+config/config.json
+
+# bun
+bun.lock

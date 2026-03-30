@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# reconcile_channels — sync Discord channel state with tmux agent state
+#
+# Compares running tmux agents (via list_teammates) against the claudecord
+# routing config and agent registry. Archives channels for dead agents,
+# reports agents without channels.
+#
+# Usage:
+#   reconcile_channels           # dry-run: show what would change
+#   reconcile_channels --fix     # apply: archive dead channels
+#
+# Requires:
+#   - claudecord MCP server running (orchestrator session)
+#   - tmux-orchestrator scripts on PATH (list_teammates)
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+CLAUDECORD_PORT="${CLAUDECORD_HTTP_PORT:-19532}"
+DRY_RUN=true
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --fix) DRY_RUN=false; shift ;;
+    *) echo "reconcile_channels: unknown flag: $1" >&2; exit 1 ;;
+  esac
+done
+
+# ---- Check claudecord is reachable ----------------------------------------
+
+HEALTH=$(curl -s "http://127.0.0.1:${CLAUDECORD_PORT}/health" 2>/dev/null) || {
+  echo "reconcile_channels: claudecord not reachable on port ${CLAUDECORD_PORT}" >&2
+  echo "  Start the orchestrator session with claudecord enabled." >&2
+  exit 1
+}
+
+echo "claudecord: $(echo "$HEALTH" | grep -o '"status":"[^"]*"' || echo 'ok')"
+
+# ---- Load routing config --------------------------------------------------
+
+ROUTING_FILE="${ROUTING_CONFIG:-${PLUGIN_ROOT}/config/routing.json}"
+
+if [[ ! -f "$ROUTING_FILE" ]]; then
+  echo "reconcile_channels: routing.json not found at ${ROUTING_FILE}" >&2
+  echo "  Run /claudecord:setup to configure." >&2
+  exit 1
+fi
+
+# ---- Get live agents from tmux --------------------------------------------
+
+LIVE_AGENTS=()
+if command -v list_teammates &>/dev/null; then
+  while IFS= read -r line; do
+    # list_teammates output: "name  status  pid"
+    AGENT=$(echo "$line" | awk '{print $1}')
+    STATUS=$(echo "$line" | awk '{print $2}')
+    [[ "$AGENT" == "NAME" ]] && continue  # skip header
+    [[ -n "$AGENT" ]] && LIVE_AGENTS+=("$AGENT")
+  done < <(list_teammates 2>/dev/null || true)
+else
+  echo "reconcile_channels: list_teammates not found on PATH — using routing.json only" >&2
+fi
+
+# ---- Compare against routing.json -----------------------------------------
+
+echo ""
+echo "=== Channel Reconciliation ==="
+echo ""
+
+CONFIGURED_AGENTS=$(python3 -c "
+import json, sys
+with open('${ROUTING_FILE}') as f:
+    d = json.load(f)
+for name in d.get('agents', {}):
+    print(name)
+" 2>/dev/null || jq -r '.agents | keys[]' "${ROUTING_FILE}" 2>/dev/null)
+
+CHANGES=0
+
+for agent in $CONFIGURED_AGENTS; do
+  is_live=false
+  for live in "${LIVE_AGENTS[@]:-}"; do
+    [[ "$live" == "$agent" ]] && is_live=true && break
+  done
+
+  if [[ "$is_live" == "false" ]]; then
+    echo "  DEAD (not in tmux): ${agent}"
+    CHANGES=$((CHANGES + 1))
+  else
+    echo "  alive:              ${agent}"
+  fi
+done
+
+if [[ $CHANGES -eq 0 ]]; then
+  echo "  All configured agents are live. Nothing to do."
+  exit 0
+fi
+
+echo ""
+echo "${CHANGES} dead agent(s) found."
+
+if [[ "$DRY_RUN" == "true" ]]; then
+  echo ""
+  echo "Dry run. Run with --fix to archive dead channels."
+  exit 0
+fi
+
+# ---- Apply: archive channels for dead agents ------------------------------
+
+echo ""
+echo "Archiving dead channels..."
+
+# For each dead agent, we'd call claudecord_archive_channel.
+# Since this is a script (not an MCP tool), we can notify the orchestrator
+# via send_message to do the archiving.
+
+ORCHESTRATOR="${CLAUDECORD_PRIMARY_AGENT:-orchestrator}"
+MSG="reconcile_channels: please archive Discord channels for dead agents: $(echo $CONFIGURED_AGENTS | tr '\n' ' ')"
+
+if command -v message_orchestrator &>/dev/null; then
+  message_orchestrator "$MSG"
+  echo "Sent archive request to orchestrator."
+else
+  echo "message_orchestrator not found — send manually:" >&2
+  echo "  $MSG" >&2
+fi
