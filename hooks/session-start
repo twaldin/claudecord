@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# SessionStart hook for claudecord plugin.
+# Injects a brief context reminder that Discord routing is active.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# Check if config exists so we know if setup has been run
+CONFIG_FILE="${CLAUDECORD_CONFIG:-${HOME}/.claudecord/config.json}"
+if [ ! -f "${CONFIG_FILE}" ]; then
+  # Not configured yet — inject setup nudge
+  context="<system-reminder>claudecord is installed but not configured. Run /claudecord:setup to connect your Discord bot before using Discord routing tools.</system-reminder>"
+else
+  context="<system-reminder>claudecord MCP server is active. Discord routing is available. Use claudecord_reply, claudecord_fetch_messages, claudecord_create_channel, and claudecord_archive_channel tools. Agent scripts use reply_discord for outbound messages.</system-reminder>"
+fi
+
+escape_for_json() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\r'/\\r}"
+  s="${s//$'\t'/\\t}"
+  printf '%s' "$s"
+}
+
+escaped=$(escape_for_json "$context")
+
+printf '{"hookSpecificOutput":{"additionalContext":"%s"}}' "$escaped"
