@@ -1,96 +1,180 @@
 # Claudecord
 
-Discord bot that routes messages to Claude agents via the Claude Code SDK. Each channel maps to an independent agent session with its own context and tools.
+> Give your agents Discord channels.
+
+A Claude Code plugin that routes Discord messages to your [tmux-orchestrator](https://github.com/twaldin/tmux-orchestrator) agent team. Talk to your agents from your phone. Each agent gets a channel. Replies come back automatically.
+
+**Requires:** tmux-orchestrator, bun, tmux
+
+## What it does
+
+- Discord message in `#orchestrator` → delivered to your orchestrator as an MCP notification
+- Discord message in `#coder-42` → routed to the `coder-42` tmux agent via `send_message`
+- Agent runs `reply_discord "done, PR #123"` → message appears in its Discord channel
+- `spawn_teammate` with claudecord active → Discord channel auto-created
+- `kill_teammate` → channel archived with 📦/🗑️ cleanup embed
 
 ## Architecture
 
 ```
-Discord Channel → Router → Agent Manager → Claude Code SDK Session
+Discord
+  │
+  ▼
+Claudecord MCP server (bun, runs in orchestrator's Claude Code session)
+  │  holds the Discord WebSocket — single bot instance
+  │
+  ├─► Orchestrator's channel?   →  MCP notification → Claude reads it directly
+  │
+  └─► Other agent's channel?    →  tmux send_message → agent tmux window
+                                                           │
+                                          agent runs reply_discord
+                                                           │
+                                          curl POST localhost:19532/reply
+                                                           │
+                                          Discord ◄────────┘
 ```
 
-- **Bot**: discord.js client handles messages and interactions
-- **Router**: maps channels to agent configs (which model, what system prompt, what tools)
-- **Agent Manager**: spawns, resumes, and kills Claude sessions per channel
-- **Sessions**: thin wrappers around the Claude Code SDK streaming API
-
-## Features
-
-- **Message routing** — each Discord channel maps to a named Claude agent; messages are queued and delivered via the MCP shim
-- **Rich Discord embeds** — spawn notifications, PR review results, completion summaries, and deploy outcomes posted as structured embeds
-- **Ephemeral channels per agent** — auto-created when `spawn_teammate` runs, auto-archived with 📦/🗑️ cleanup reactions when the agent exits
-- **Slash commands** — `/spawn`, `/status`, `/tasks`, `/kill`, `/stats` registered guild-scoped for instant availability
-- **Auto-updating status dashboard** — single embed in `#status` that edits in-place every 60 seconds
-- **Stats tracking** — PRs merged, issues fixed, agent spawns/crashes stored per-day and all-time in `stats.json`
-- **API security** — optional Bearer token auth (`CLAUDECORD_API_SECRET`), user allowlist for privileged commands (`DISCORD_ALLOWED_USERS`)
-
-## Quickstart
-
-### 1. Create a Discord Bot
-
-1. Go to [Discord Developer Portal](https://discord.com/developers/applications) → **New Application**
-2. Under **Bot**: click **Add Bot**, then copy the token
-3. Under **Bot → Privileged Gateway Intents**, enable:
-   - **Message Content Intent**
-   - **Server Members Intent** (optional, for member lookups)
-4. Under **OAuth2 → URL Generator**, select scopes: `bot`, `applications.commands`
-5. Bot permissions: `Send Messages`, `Read Message History`, `Add Reactions`, `Embed Links`, `Manage Channels` (if using ephemeral channels), `Use Slash Commands`
-6. Copy the generated URL, open it in a browser, and invite the bot to your server
-
-### 2. Install prerequisites
+## Install
 
 ```bash
-# Node.js 20+
-node --version
+# Install as a local plugin
+claude plugin install ./claudecord
 
-# Claude Code CLI
-npm install -g @anthropic-ai/claude-code
-
-# tmux (for agent process management)
-# macOS: brew install tmux
-# Ubuntu: sudo apt install tmux
-
-# GitHub CLI (optional, for coder/evaluator agents)
-# macOS: brew install gh
-# Ubuntu: sudo apt install gh
-
-# Python 3 (optional, for some utility scripts)
-python3 --version
-
-# Project dependencies
-npm install
+# Run setup wizard
+/claudecord:setup
 ```
 
-### 3. Configure
+Or add to your project's `.claude/settings.json` (project-scope only, not user-scope):
+
+```json
+{
+  "plugins": ["./claudecord"]
+}
+```
+
+## Setup
+
+Run `/claudecord:setup` once. It walks you through:
+
+1. Discord bot creation (links to Developer Portal)
+2. Bot token entry and validation
+3. Guild (server) ID
+4. Orchestrator channel mapping
+5. Optional additional agent channels
+6. Test connection
+
+Config is written to `~/.claudecord/config.json` (600 permissions, token protected).
+Routing is written to `config/routing.json` (gitignored).
+
+## Project structure
+
+```
+claudecord/
+├── .claude-plugin/
+│   ├── plugin.json          # Plugin metadata
+│   └── marketplace.json     # Marketplace listing
+├── hooks/
+│   ├── hooks.json           # SessionStart hook registration
+│   └── session-start        # Context injection: "Discord routing is active"
+├── skills/
+│   └── discord-setup/
+│       └── SKILL.md         # /claudecord:setup wizard
+├── scripts/
+│   ├── reply_discord        # Agent → Discord (curl to HTTP side-channel)
+│   └── reconcile_channels   # Sync channel state with tmux agents
+├── src/
+│   ├── mcp-server/
+│   │   └── index.ts         # MCP server: Discord bot + tools + HTTP side-channel
+│   ├── daemon/              # Legacy Express daemon (replaced by mcp-server/)
+│   └── shared/
+│       └── types.ts
+├── config/
+│   └── routing.example.json # Copy to routing.json and fill in channel IDs
+├── .mcp.json                # Auto-starts MCP server when plugin is enabled
+└── package.json
+```
+
+## MCP tools
+
+The orchestrator session gets these tools automatically:
+
+| Tool | Description |
+|------|-------------|
+| `claudecord_reply` | Send a message to a Discord channel |
+| `claudecord_fetch_messages` | Fetch recent messages from a channel |
+| `claudecord_create_channel` | Create a Discord channel for an agent |
+| `claudecord_archive_channel` | Archive a channel when an agent completes |
+
+## Scripts
+
+### `reply_discord`
+
+For agent sessions (without the plugin). Requires `CLAUDECORD_CHANNEL_ID` env var or `--channel`.
 
 ```bash
-cp .env.example .env
-# Fill in DISCORD_BOT_TOKEN, ANTHROPIC_API_KEY, and other values
-
-bash scripts/setup.sh
-# Interactive — prompts for channel IDs and fills placeholders in agent configs
+reply_discord "task complete, PR #42"
+reply_discord "here is the result" --channel 1234567890
+reply_discord "see above" --reply-to 9876543210
 ```
 
-`ANTHROPIC_API_KEY` must be set in your environment (or in `.env`) for agents to run.
+### `reconcile_channels`
 
-### 4. Start
+Sync Discord channels with live tmux agents.
 
 ```bash
-bash scripts/start.sh
+reconcile_channels        # dry run: show what would change
+reconcile_channels --fix  # archive channels for dead agents
 ```
 
-This starts the daemon and bootstraps the orchestrator in a tmux session.
+## Config
 
-Alternatively, for daemon-only mode (without agent orchestration):
+`~/.claudecord/config.json`:
 
-```bash
-npm run daemon
+```json
+{
+  "discordBotToken": "MTIz...",
+  "discordGuildId": "111222333444",
+  "primaryAgent": "orchestrator",
+  "httpPort": 19532,
+  "allowedUsers": ["123456789"]
+}
 ```
 
-## Documentation
+`config/routing.json` (gitignored, copy from `routing.example.json`):
 
-- [`docs/architecture.md`](docs/architecture.md) — full system architecture, data flows, and component reference
-- [`docs/patterns/rich-embeds.md`](docs/patterns/rich-embeds.md) — how agents send embeds via `claudecord_reply`
-- [`docs/patterns/ephemeral-channels.md`](docs/patterns/ephemeral-channels.md) — agent channel lifecycle
+```json
+{
+  "agents": {
+    "orchestrator": { "channels": ["111000111000111001"] },
+    "evaluator":    { "channels": ["111000111000111002"] }
+  },
+  "defaultAgent": "orchestrator"
+}
+```
+
+## Env vars
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CLAUDECORD_CONFIG` | `~/.claudecord/config.json` | Config file path |
+| `CLAUDECORD_HTTP_PORT` | `19532` | HTTP side-channel port |
+| `CLAUDECORD_PRIMARY_AGENT` | `orchestrator` | Primary agent name |
+| `DISCORD_BOT_TOKEN` | — | Bot token (falls back from config) |
+| `DISCORD_GUILD_ID` | — | Guild ID (falls back from config) |
+| `DISCORD_ALLOWED_USERS` | — | Comma-separated Discord user IDs |
+
+## Single-bot design
+
+Install claudecord **only on the orchestrator session** (project-scope `.claude/settings.json`, not user-scope). This ensures only one Discord bot connection is active. Agent sessions don't need the plugin — they use the `reply_discord` script which curl-POSTs to the orchestrator's HTTP side-channel.
+
+## Required bot permissions
+
+- `Send Messages`
+- `Read Messages / View Channels`
+- `Read Message History`
+- `Add Reactions`
+- `Embed Links`
+- `Manage Channels` (for ephemeral channel creation/archiving)
 
 ## License
 
