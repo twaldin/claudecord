@@ -26,7 +26,7 @@ import {
   type TextChannel,
 } from 'discord.js'
 import { execFile } from 'child_process'
-import { readFileSync, writeFileSync, existsSync, renameSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, renameSync, readdirSync } from 'fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'http'
 import { homedir } from 'os'
 import { join, resolve, dirname } from 'path'
@@ -168,11 +168,37 @@ async function sendToChannel(channelId: string, text: string, replyTo?: string):
 
 // ---- tmux routing ----------------------------------------------------------
 
+/** Locate the tmux-orchestrator send_message script.
+ *  Priority: TMUX_ORCHESTRATOR_SCRIPTS env → plugin cache glob → PATH. */
+function findSendMessage(): string {
+  // 1. Explicit env var
+  const fromEnv = process.env['TMUX_ORCHESTRATOR_SCRIPTS']
+  if (fromEnv) {
+    const p = join(fromEnv, 'send_message')
+    if (existsSync(p)) return p
+  }
+
+  // 2. ~/.claude/plugins/cache/tmux-orchestrator/*/scripts/send_message
+  const cacheBase = join(homedir(), '.claude', 'plugins', 'cache', 'tmux-orchestrator')
+  if (existsSync(cacheBase)) {
+    try {
+      for (const entry of readdirSync(cacheBase)) {
+        const candidate = join(cacheBase, entry, 'scripts', 'send_message')
+        if (existsSync(candidate)) return candidate
+      }
+    } catch {}
+  }
+
+  // 3. Fall back to PATH
+  return 'send_message'
+}
+
+const SEND_MESSAGE_PATH = findSendMessage()
+
 function sendToAgent(agentName: string, msg: Message): void {
   const text = msg.content || '(attachment)'
   const envelope = `[DISCORD:${msg.author.username}]: ${text}`
-  const scriptPath = join(PLUGIN_ROOT, 'scripts', 'agents', 'send_message')
-  execFile(scriptPath, [agentName, envelope], (err) => {
+  execFile(SEND_MESSAGE_PATH, [agentName, envelope], (err) => {
     if (err) {
       process.stderr.write(`claudecord: send_message to ${agentName} failed: ${err.message}\n`)
     }
@@ -488,14 +514,20 @@ httpServer.listen(HTTP_PORT, '127.0.0.1', () => {
   process.stderr.write(`claudecord: HTTP side-channel on 127.0.0.1:${HTTP_PORT}\n`)
 })
 
-client.once('ready', c => {
-  process.stderr.write(`claudecord: gateway connected as ${c.user.tag}\n`)
-})
+const SUB_AGENT_MODE = Boolean(process.env['AGENT_NAME'])
 
-client.login(TOKEN!).catch(err => {
-  process.stderr.write(`claudecord: login failed: ${err}\n`)
-  process.exit(1)
-})
+if (SUB_AGENT_MODE) {
+  process.stderr.write('claudecord: sub-agent mode — Discord gateway disabled\n')
+} else {
+  client.once('ready', c => {
+    process.stderr.write(`claudecord: gateway connected as ${c.user.tag}\n`)
+  })
+
+  client.login(TOKEN!).catch(err => {
+    process.stderr.write(`claudecord: login failed: ${err}\n`)
+    process.exit(1)
+  })
+}
 
 // ---- Graceful shutdown -----------------------------------------------------
 
@@ -506,7 +538,9 @@ function shutdown(): void {
   process.stderr.write('claudecord: shutting down\n')
   httpServer.close()
   setTimeout(() => process.exit(0), 2000)
-  void client.destroy().finally(() => process.exit(0))
+  if (!SUB_AGENT_MODE) {
+    void client.destroy().finally(() => process.exit(0))
+  }
 }
 
 process.stdin.on('end', shutdown)
