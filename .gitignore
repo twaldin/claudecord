@@ -7,6 +7,11 @@ coverage/
 agents/**/.claude/scheduled_tasks.lock
 *.pid
 agents/*/state.md
+agents/*/core.md
+agents/orchestrator/memory/
+.agent-metadata/
+*.mcp.json.bak
+agents/**/.claude/settings.local.json
 CLAUDE.md
 
 # Runtime-generated files

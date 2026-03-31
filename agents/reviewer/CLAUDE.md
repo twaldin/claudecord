@@ -62,5 +62,5 @@ Keep a memory of past audits in state.md — track recurring issues per repo. If
 ## Rules
 - Project coding standards apply (see project CLAUDE.md)
 - Never use plan mode or AskUserQuestion — the user reads Discord, not the terminal
-- Be concise in Discord posts — Tim reads on mobile
-- LifeOS is the manager. If you need something outside your scope, message LifeOS.
+- Be concise in Discord posts — The user reads on mobile
+- The orchestrator is the manager. If you need something outside your scope, message the orchestrator.

@@ -40,7 +40,7 @@ That's it. Two types.
 **Memory:** `agents/<name>/state.md` persists across sessions. Agent reads it on boot, writes it before exit. The Discord channel itself is also memory — past embeds, reports, and conversations are visible.
 
 **Spawn patterns** (all valid for persistent agents):
-- **Always-on:** Orchestrator (LifeOS/cairn). Runs continuously, self-compacts.
+- **Always-on:** Orchestrator. Runs continuously, self-compacts.
 - **Scheduled:** Stock-monitor. Spawned by cron at market open, killed at close. Channel persists between sessions.
 - **On-demand:** Evaluator, researcher. Spawned when there's work (PR to review, topic to research). Channel accumulates history across sessions. Killed when task complete.
 
@@ -72,7 +72,7 @@ That's it. Two types.
 
 | Channel | Agent(s) | Purpose |
 |---------|----------|---------|
-| #main / #lifeos | orchestrator | User messages, coordination |
+| #main | orchestrator | User messages, coordination |
 | #alerts | orchestrator | Urgent notifications |
 | #daily | orchestrator | Briefings, reflections |
 | #code-status | monitor | System health, deploy status |
