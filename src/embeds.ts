@@ -7,7 +7,7 @@ import type {
   DeployEmbedData,
   CleanupEmbedData,
   StatusBoardData,
-} from '../shared/types.js'
+} from './shared/types.js'
 
 export const AGENT_COLORS = {
   coder:      0x5865F2,

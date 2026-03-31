@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveAgent } from '../src/daemon/routing.js'
+import { resolveAgent } from '../src/routing.js'
 import type { RoutingConfig } from '../src/shared/types.js'
 
 const config: RoutingConfig = {
@@ -20,8 +20,8 @@ describe('resolveAgent', () => {
     expect(resolveAgent(config, '333')).toBe('trader')
   })
 
-  it('falls back to defaultAgent for unknown channels', () => {
-    expect(resolveAgent(config, '999')).toBe('orchestrator')
+  it('returns null for unknown channels', () => {
+    expect(resolveAgent(config, '999')).toBeNull()
   })
 
   it('returns null when no default and channel unknown', () => {

@@ -22,19 +22,19 @@ import {
   GatewayIntentBits,
   Partials,
   ChannelType,
-  EmbedBuilder,
   type Message,
   type TextChannel,
 } from 'discord.js'
-import { execFile, execSync } from 'child_process'
-import { createHash } from 'crypto'
-import { readFileSync, writeFileSync, existsSync, renameSync, readdirSync, mkdirSync } from 'fs'
+import { execFile } from 'child_process'
+import { readFileSync, existsSync, readdirSync } from 'fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'http'
 import { homedir } from 'os'
 import { join, resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { loadRouting, resolveAgent, addAgentChannel, removeAgentChannel } from '../daemon/routing.js'
-import { buildSpawnEmbed, buildCleanupEmbed } from '../daemon/embeds.js'
+import { loadRouting, resolveAgent, addAgentChannel, removeAgentChannel } from '../routing.js'
+import { buildSpawnEmbed, buildCleanupEmbed } from '../embeds.js'
+import { downloadAttachments } from './attachments.js'
+import { startPermissionWatcher } from './permissions.js'
 import type { RoutingConfig, AgentType, AgentStateEntry } from '../shared/types.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -95,7 +95,7 @@ let routing: RoutingConfig = existsSync(ROUTING_PATH)
   ? loadRouting(ROUTING_PATH)
   : { agents: {}, defaultAgent: PRIMARY }
 
-// In-memory agent registry (mirrors daemon's agentRegistry for ephemeral channel lookup)
+// In-memory agent registry (ephemeral channel lookup)
 const agentRegistry = new Map<string, AgentStateEntry>()
 
 function resolveAgentForChannel(channelId: string): string | null {
@@ -108,13 +108,6 @@ function resolveAgentForChannel(channelId: string): string | null {
     if (entry.channelId === channelId && entry.status === 'alive') return name
   }
   return null
-}
-
-function isPrimaryChannel(channelId: string): boolean {
-  const primaryConfig = routing.agents[PRIMARY]
-  if (primaryConfig?.channels.includes(channelId)) return true
-  // If no static routing exists for this channel, default to primary
-  return resolveAgentForChannel(channelId) === null || resolveAgentForChannel(channelId) === PRIMARY
 }
 
 // ---- Discord client --------------------------------------------------------
@@ -200,31 +193,6 @@ function findSendMessage(): string {
 }
 
 const SEND_MESSAGE_PATH = findSendMessage()
-
-const ATTACHMENT_DIR = join(homedir(), '.claudecord', 'attachments')
-
-async function downloadAttachments(msg: Message): Promise<string[]> {
-  if (msg.attachments.size === 0) return []
-
-  mkdirSync(ATTACHMENT_DIR, { recursive: true })
-  const paths: string[] = []
-
-  for (const [, attachment] of msg.attachments) {
-    const ext = attachment.name?.split('.').pop() ?? 'bin'
-    const filename = `${msg.id}-${attachment.id}.${ext}`
-    const filepath = join(ATTACHMENT_DIR, filename)
-    try {
-      const res = await fetch(attachment.url)
-      const buf = Buffer.from(await res.arrayBuffer())
-      writeFileSync(filepath, buf)
-      paths.push(filepath)
-      process.stderr.write(`claudecord: saved attachment ${filepath}\n`)
-    } catch (err) {
-      process.stderr.write(`claudecord: failed to download attachment: ${err}\n`)
-    }
-  }
-  return paths
-}
 
 function sendToAgent(agentName: string, msg: Message): void {
   const sendText = (text: string) => {
@@ -534,258 +502,6 @@ client.on('error', err => {
   process.stderr.write(`claudecord: discord client error: ${err}\n`)
 })
 
-// ---- Permission Watcher ----------------------------------------------------
-
-const POLL_INTERVAL_MS = 3000
-const PERMISSION_TIMEOUT_MS = 5 * 60 * 1000
-const TMUX_SESSION = 'claudecord'
-const SCAN_LINES = 30
-
-const PERMISSION_PATTERNS: Array<{ re: RegExp; label: string }> = [
-  { re: /Do you want to allow/i,          label: 'tool-allow'   },
-  { re: /Yes, allow once/,                label: 'tool-allow'   },
-  { re: /Yes, and always allow/,          label: 'tool-allow'   },
-  { re: /Do you want to proceed/i,        label: 'mcp-approval' },
-  { re: /\d+ MCP server.{0,20}approv/i,   label: 'mcp-approval' },
-  { re: /Do you want to create/i,         label: 'file-create'  },
-  { re: /Esc to cancel/,                  label: 'tool-allow'   },
-]
-
-interface PendingPrompt {
-  agentName: string
-  channelId: string
-  messageId: string
-  paneHash: string
-  detectedAt: number
-  label: string
-  tool: string
-  context: string
-}
-
-const pendingPrompts = new Map<string, PendingPrompt>()
-const promptByMessageId = new Map<string, string>()
-const resolvedHashes = new Map<string, number>()
-
-function paneHash(text: string): string {
-  return createHash('sha1').update(text.slice(-500)).digest('hex').slice(0, 12)
-}
-
-function extractPromptDetails(paneText: string): { tool: string; context: string } {
-  // Match "Tool: Bash" (TUI dialog) or "⏺ Write(/path)" / "Bash(cmd)" (inline format)
-  const toolMatch = paneText.match(/Tool:\s*(.+)/i)
-  const inlineMatch = paneText.match(/[⏺●]\s*(Write|Bash|Edit|Read|Glob|Grep)\(([^)]*)\)/i)
-  const cmdMatch = paneText.match(/Command:\s*(.+)/i)
-  const pathMatch = paneText.match(/Do you want to (?:create|allow|proceed with)\s+(.+?)(?:\?|$)/im)
-  const mcpMatch = paneText.match(/Server:\s*(.+)/i)
-  const createMatch = paneText.match(/Create file\s*\n\s*(.+)/im)
-
-  const tool = toolMatch?.[1]?.trim()
-    ?? inlineMatch?.[1]?.trim()
-    ?? mcpMatch?.[1]?.trim()
-    ?? 'unknown'
-  const context = cmdMatch?.[1]?.trim()
-    ?? inlineMatch?.[2]?.trim()
-    ?? createMatch?.[1]?.trim()
-    ?? pathMatch?.[1]?.trim()
-    ?? paneText.slice(-300).replace(/\x1b\[[0-9;]*m/g, '').trim()
-
-  return { tool, context }
-}
-
-function buildPermissionEmbed(
-  agentName: string, label: string, tool: string, context: string,
-): EmbedBuilder {
-  return new EmbedBuilder()
-    .setTitle(`Permission required — ${agentName}`)
-    .setColor(0xFFA500)
-    .addFields(
-      { name: 'Type', value: label, inline: true },
-      { name: 'Tool', value: tool, inline: true },
-      { name: 'Context', value: context.slice(0, 1024), inline: false },
-    )
-    .setFooter({ text: 'React \u2705 to allow  |  \u274c to deny  |  Auto-denies in 5m' })
-    .setTimestamp()
-}
-
-async function postPermissionPrompt(
-  agentName: string, channelId: string, label: string,
-  tool: string, context: string, hash: string,
-): Promise<void> {
-  try {
-    const ch = await fetchTextChannel(channelId)
-    const embed = buildPermissionEmbed(agentName, label, tool, context)
-    const msg = await ch.send({ embeds: [embed] })
-    await msg.react('\u2705')
-    await msg.react('\u274c')
-
-    const pending: PendingPrompt = {
-      agentName, channelId, messageId: msg.id, paneHash: hash,
-      detectedAt: Date.now(), label, tool, context,
-    }
-    pendingPrompts.set(agentName, pending)
-    promptByMessageId.set(msg.id, agentName)
-    process.stderr.write(`claudecord: permission prompt posted for ${agentName} (${tool})\n`)
-  } catch (err) {
-    process.stderr.write(`claudecord: failed to post permission prompt: ${err}\n`)
-  }
-}
-
-async function resolvePrompt(
-  agentName: string, pending: PendingPrompt, decision: 'allow' | 'deny',
-): Promise<void> {
-  pendingPrompts.delete(agentName)
-  promptByMessageId.delete(pending.messageId)
-  resolvedHashes.set(pending.paneHash, Date.now())
-
-  // TUI menu: Enter = accept highlighted "Yes", Down Down Enter = select "No"
-  const target = `${TMUX_SESSION}:${agentName}`
-  if (decision === 'allow') {
-    execFile('tmux', ['send-keys', '-t', target, 'Enter'], err => {
-      if (err) process.stderr.write(`claudecord: tmux send-keys failed for ${agentName}: ${err.message}\n`)
-    })
-  } else {
-    execFile('tmux', ['send-keys', '-t', target, 'Down', 'Down', 'Enter'], err => {
-      if (err) process.stderr.write(`claudecord: tmux send-keys failed for ${agentName}: ${err.message}\n`)
-    })
-  }
-
-  try {
-    const ch = await fetchTextChannel(pending.channelId)
-    const msg = await ch.messages.fetch(pending.messageId)
-    const resultEmbed = new EmbedBuilder()
-      .setTitle(`Permission ${decision === 'allow' ? 'allowed' : 'denied'} — ${agentName}`)
-      .setColor(decision === 'allow' ? 0x57F287 : 0xED4245)
-      .addFields(
-        { name: 'Tool', value: pending.tool, inline: true },
-        { name: 'Decision', value: decision.toUpperCase(), inline: true },
-      )
-      .setTimestamp()
-    await msg.edit({ embeds: [resultEmbed] })
-  } catch {}
-}
-
-async function handleTimeout(agentName: string, pending: PendingPrompt): Promise<void> {
-  pendingPrompts.delete(agentName)
-  promptByMessageId.delete(pending.messageId)
-  resolvedHashes.set(pending.paneHash, Date.now())
-
-  execFile('tmux', ['send-keys', '-t', `${TMUX_SESSION}:${agentName}`, 'Down', 'Down', 'Enter'])
-
-  try {
-    const ch = await fetchTextChannel(pending.channelId)
-    const msg = await ch.messages.fetch(pending.messageId)
-    const timeoutEmbed = new EmbedBuilder()
-      .setTitle(`Permission timed out — ${agentName}`)
-      .setColor(0x95A5A6)
-      .addFields(
-        { name: 'Tool', value: pending.tool, inline: true },
-        { name: 'Result', value: 'AUTO-DENIED (5m timeout)', inline: true },
-      )
-      .setTimestamp()
-    await msg.edit({ embeds: [timeoutEmbed] })
-  } catch {}
-}
-
-async function pollPermissions(): Promise<void> {
-  // Expire timed-out prompts
-  const now = Date.now()
-  for (const [agentName, pending] of pendingPrompts) {
-    if (now - pending.detectedAt > PERMISSION_TIMEOUT_MS) {
-      await handleTimeout(agentName, pending)
-    }
-  }
-
-  // Clean resolved hashes older than 60s
-  for (const [h, ts] of resolvedHashes) {
-    if (now - ts > 60_000) resolvedHashes.delete(h)
-  }
-
-  // List tmux windows
-  let windows: string[]
-  try {
-    const out = execSync(
-      `tmux list-windows -t ${TMUX_SESSION} -F '#{window_name}'`,
-      { encoding: 'utf8' },
-    )
-    windows = out.trim().split('\n').filter(Boolean)
-  } catch {
-    return
-  }
-
-  for (const windowName of windows) {
-    if (pendingPrompts.has(windowName)) continue
-    if (windowName === PRIMARY) continue
-
-    let paneText: string
-    try {
-      paneText = execSync(
-        `tmux capture-pane -t ${TMUX_SESSION}:${windowName} -p -S -${SCAN_LINES}`,
-        { encoding: 'utf8' },
-      )
-    } catch {
-      continue
-    }
-
-    const clean = paneText.replace(/\x1b\[[0-9;]*[mGKHFJABCDsuhlr]/g, '')
-
-    let matched: { label: string } | null = null
-    for (const { re, label } of PERMISSION_PATTERNS) {
-      if (re.test(clean)) { matched = { label }; break }
-    }
-    if (!matched) continue
-
-    const hash = paneHash(clean)
-    if (resolvedHashes.has(hash)) continue
-
-    // Look up channel from registry (ephemeral) or routing.json (persistent)
-    const entry = agentRegistry.get(windowName)
-    let channelId = entry?.channelId
-
-    // Also check routing.json for persistent agents
-    if (!channelId) {
-      const agentRouting = routing.agents[windowName]
-      if (agentRouting?.channels?.[0]) {
-        channelId = agentRouting.channels[0]
-      }
-    }
-
-    if (!channelId) {
-      process.stderr.write(`claudecord: permission prompt on ${windowName} but no channel — skipping\n`)
-      continue
-    }
-
-    const { tool, context } = extractPromptDetails(clean)
-    await postPermissionPrompt(windowName, channelId, matched.label, tool, context, hash)
-  }
-}
-
-// Reaction handler for permission approvals
-client.on('messageReactionAdd', async (reaction, user) => {
-  if (reaction.partial) {
-    try { await reaction.fetch() } catch { return }
-  }
-  if (user.bot) return
-  if (ALLOWED_USERS.length > 0 && !ALLOWED_USERS.includes(user.id)) return
-
-  const agentName = promptByMessageId.get(reaction.message.id)
-  if (!agentName) return
-
-  const pending = pendingPrompts.get(agentName)
-  if (!pending) return
-
-  const emoji = reaction.emoji.name
-  if (emoji === '\u2705') {
-    await resolvePrompt(agentName, pending, 'allow')
-  } else if (emoji === '\u274c') {
-    await resolvePrompt(agentName, pending, 'deny')
-  }
-})
-
-function startPermissionWatcher(): void {
-  setInterval(() => { void pollPermissions() }, POLL_INTERVAL_MS)
-  process.stderr.write('claudecord: permission watcher started (3s poll)\n')
-}
-
 // ---- Startup ---------------------------------------------------------------
 
 process.on('unhandledRejection', err => {
@@ -808,7 +524,7 @@ if (SUB_AGENT_MODE) {
 } else {
   client.once('ready', c => {
     process.stderr.write(`claudecord: gateway connected as ${c.user.tag}\n`)
-    startPermissionWatcher()
+    startPermissionWatcher(client, routing, agentRegistry, PRIMARY, ALLOWED_USERS)
   })
 
   client.login(TOKEN!).catch(err => {

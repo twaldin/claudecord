@@ -8,7 +8,7 @@ import {
   buildCleanupEmbed,
   buildStatusBoardEmbed,
   AGENT_COLORS,
-} from '../src/daemon/embeds.js'
+} from '../src/embeds.js'
 import type {
   SpawnEmbedData,
   CompletionEmbedData,

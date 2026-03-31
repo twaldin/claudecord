@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { resolveAgent, loadRouting, addAgentChannel, removeAgentChannel, saveRouting } from '../src/daemon/routing.js'
+import { resolveAgent, loadRouting, addAgentChannel, removeAgentChannel, saveRouting } from '../src/routing.js'
 import type { RoutingConfig, AgentChannelMeta } from '../src/shared/types.js'
 
 let tmpDir: string

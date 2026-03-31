@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, renameSync } from 'fs'
-import type { RoutingConfig, AgentChannelMeta } from '../shared/types.js'
+import type { RoutingConfig, AgentChannelMeta } from './shared/types.js'
 
 export function resolveAgent(config: RoutingConfig, channelId: string): string | null {
   for (const [name, routing] of Object.entries(config.agents)) {
