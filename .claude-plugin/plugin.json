@@ -9,5 +9,6 @@
   "homepage": "https://github.com/twaldin/claudecord",
   "repository": "https://github.com/twaldin/claudecord",
   "license": "MIT",
-  "keywords": ["discord", "multi-agent", "tmux", "orchestration", "messaging"]
+  "keywords": ["discord", "multi-agent", "tmux", "orchestration", "messaging"],
+  "commands": ["./skills/discord-setup/SKILL.md"]
 }
