@@ -240,9 +240,14 @@ function sendToAgent(agentName: string, msg: Message): void {
   // Download attachments first if present, then send message with file paths
   if (msg.attachments.size > 0) {
     void downloadAttachments(msg).then(paths => {
+      const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'])
       const parts: string[] = []
       if (msg.content) parts.push(msg.content)
-      for (const p of paths) parts.push(`[Image: ${p}]`)
+      for (const p of paths) {
+        const ext = p.split('.').pop()?.toLowerCase() ?? ''
+        const label = IMAGE_EXTS.has(ext) ? 'Image' : 'File'
+        parts.push(`[${label}: ${p}]`)
+      }
       sendText(parts.join('\n') || '(attachment)')
     })
   } else {
