@@ -28,7 +28,7 @@ import {
 } from 'discord.js'
 import { execFile, execSync } from 'child_process'
 import { createHash } from 'crypto'
-import { readFileSync, writeFileSync, existsSync, renameSync, readdirSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, renameSync, readdirSync, mkdirSync } from 'fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'http'
 import { homedir } from 'os'
 import { join, resolve, dirname } from 'path'
@@ -201,15 +201,53 @@ function findSendMessage(): string {
 
 const SEND_MESSAGE_PATH = findSendMessage()
 
-function sendToAgent(agentName: string, msg: Message): void {
-  const text = msg.content || '(attachment)'
-  execFile(SEND_MESSAGE_PATH, [agentName, text], {
-    env: { ...process.env, AGENT_NAME: msg.author.username },
-  }, (err) => {
-    if (err) {
-      process.stderr.write(`claudecord: send_message to ${agentName} failed: ${err.message}\n`)
+const ATTACHMENT_DIR = join(homedir(), '.claudecord', 'attachments')
+
+async function downloadAttachments(msg: Message): Promise<string[]> {
+  if (msg.attachments.size === 0) return []
+
+  mkdirSync(ATTACHMENT_DIR, { recursive: true })
+  const paths: string[] = []
+
+  for (const [, attachment] of msg.attachments) {
+    const ext = attachment.name?.split('.').pop() ?? 'bin'
+    const filename = `${msg.id}-${attachment.id}.${ext}`
+    const filepath = join(ATTACHMENT_DIR, filename)
+    try {
+      const res = await fetch(attachment.url)
+      const buf = Buffer.from(await res.arrayBuffer())
+      writeFileSync(filepath, buf)
+      paths.push(filepath)
+      process.stderr.write(`claudecord: saved attachment ${filepath}\n`)
+    } catch (err) {
+      process.stderr.write(`claudecord: failed to download attachment: ${err}\n`)
     }
-  })
+  }
+  return paths
+}
+
+function sendToAgent(agentName: string, msg: Message): void {
+  const sendText = (text: string) => {
+    execFile(SEND_MESSAGE_PATH, [agentName, text], {
+      env: { ...process.env, AGENT_NAME: msg.author.username },
+    }, (err) => {
+      if (err) {
+        process.stderr.write(`claudecord: send_message to ${agentName} failed: ${err.message}\n`)
+      }
+    })
+  }
+
+  // Download attachments first if present, then send message with file paths
+  if (msg.attachments.size > 0) {
+    void downloadAttachments(msg).then(paths => {
+      const parts: string[] = []
+      if (msg.content) parts.push(msg.content)
+      for (const p of paths) parts.push(`[Image: ${p}]`)
+      sendText(parts.join('\n') || '(attachment)')
+    })
+  } else {
+    sendText(msg.content || '(empty message)')
+  }
 }
 
 // ---- MCP server ------------------------------------------------------------
