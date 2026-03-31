@@ -23,13 +23,13 @@ MODE="${1:-full}"
 
 echo "=== Claudecord System Restart (mode: $MODE) ==="
 
-# --- Phase 1: Kill all non-LifeOS agents ---
+# --- Phase 1: Kill all non-orchestrator agents ---
 if [ "$MODE" != "--agents" ]; then
   echo ""
   echo "Phase 1: Killing all agents..."
   for win in $(tmux list-windows -t "$SESSION" -F '#{window_name}' 2>/dev/null); do
     case "$win" in
-      main|lifeos) continue ;;  # Never kill LifeOS or main
+      main|orchestrator) continue ;;  # Never kill orchestrator or main
       *)
         echo "  Killing $win..."
         "$SCRIPTS/kill_teammate" "$win" 2>/dev/null || tmux kill-window -t "$SESSION:$win" 2>/dev/null || true

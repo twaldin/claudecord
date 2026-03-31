@@ -10,9 +10,12 @@ agents/*/state.md
 agents/*/core.md
 agents/orchestrator/memory/
 .agent-metadata/
-*.mcp.json.bak
+*.bak
 agents/**/.claude/settings.local.json
 CLAUDE.md
+agents/monitor/
+agents/trader/
+agents/stock-monitor/
 
 # Runtime-generated files
 config/routing.json
