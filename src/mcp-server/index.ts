@@ -571,13 +571,22 @@ function paneHash(text: string): string {
 }
 
 function extractPromptDetails(paneText: string): { tool: string; context: string } {
+  // Match "Tool: Bash" (TUI dialog) or "⏺ Write(/path)" / "Bash(cmd)" (inline format)
   const toolMatch = paneText.match(/Tool:\s*(.+)/i)
+  const inlineMatch = paneText.match(/[⏺●]\s*(Write|Bash|Edit|Read|Glob|Grep)\(([^)]*)\)/i)
   const cmdMatch = paneText.match(/Command:\s*(.+)/i)
   const pathMatch = paneText.match(/Do you want to (?:create|allow|proceed with)\s+(.+?)(?:\?|$)/im)
   const mcpMatch = paneText.match(/Server:\s*(.+)/i)
+  const createMatch = paneText.match(/Create file\s*\n\s*(.+)/im)
 
-  const tool = toolMatch?.[1]?.trim() ?? mcpMatch?.[1]?.trim() ?? 'unknown'
-  const context = cmdMatch?.[1]?.trim() ?? pathMatch?.[1]?.trim()
+  const tool = toolMatch?.[1]?.trim()
+    ?? inlineMatch?.[1]?.trim()
+    ?? mcpMatch?.[1]?.trim()
+    ?? 'unknown'
+  const context = cmdMatch?.[1]?.trim()
+    ?? inlineMatch?.[2]?.trim()
+    ?? createMatch?.[1]?.trim()
+    ?? pathMatch?.[1]?.trim()
     ?? paneText.slice(-300).replace(/\x1b\[[0-9;]*m/g, '').trim()
 
   return { tool, context }
