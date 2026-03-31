@@ -1,6 +1,6 @@
 ---
-name: discord-setup
-description: "Interactive setup wizard for claudecord. Configures Discord bot token, guild ID, and channel routing. Run once to get claudecord working."
+name: SKILL
+description: "Interactive setup wizard for claudecord. Configures bot token, guild ID, and channel routing. Run once to get claudecord working."
 user-invocable: true
 ---
 
