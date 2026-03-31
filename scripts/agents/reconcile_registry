@@ -1,4 +1,0 @@
-#!/bin/bash
-# reconcile_registry — Deprecated. Delegates to reconcile_agents.
-# Use reconcile_agents directly going forward.
-exec "$(dirname "$0")/reconcile_agents" "$@"
