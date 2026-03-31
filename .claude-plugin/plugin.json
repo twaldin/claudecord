@@ -1,0 +1,24 @@
+{
+  "name": "claudecord",
+  "version": "0.1.0",
+  "description": "Discord-based agent communication for Claude Code. Per-agent channels, status boards, and phone-accessible orchestration.",
+  "author": {
+    "name": "Tim Waldin",
+    "email": "timothy@waldin.net"
+  },
+  "commands": [
+    "./commands/setup.md",
+    "./commands/status.md"
+  ],
+  "homepage": "https://github.com/twaldin/claudecord",
+  "repository": "https://github.com/twaldin/claudecord",
+  "license": "MIT",
+  "keywords": [
+    "discord",
+    "agents",
+    "communication",
+    "orchestration",
+    "channels",
+    "status-board"
+  ]
+}

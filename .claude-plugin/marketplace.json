@@ -1,0 +1,20 @@
+{
+  "name": "claudecord",
+  "owner": {
+    "name": "Tim Waldin",
+    "email": "timothy@waldin.net"
+  },
+  "metadata": {
+    "description": "Discord-based agent communication for Claude Code. Per-agent channels, status boards, and phone-accessible orchestration.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "claudecord",
+      "source": "./",
+      "description": "Give your Claude Code agents Discord channels. Talk to them from your phone. Status boards, routing, and per-agent isolation.",
+      "category": "communication",
+      "tags": ["discord", "agents", "communication", "channels", "mobile"]
+    }
+  ]
+}
