@@ -64,8 +64,27 @@ if [[ -z "$CHANNEL_ID" ]]; then
   CHANNEL_ID="${CLAUDECORD_CHANNEL_ID:-}"
 fi
 
+if [[ -z "$CHANNEL_ID" ]] && [[ -n "${AGENT_NAME:-}" ]]; then
+  # Auto-detect from routing.json using agent name
+  ROUTING_FILE="${HOME}/.claude/plugins/cache/tmux-orchestrator/claudecord"
+  for _rf in "$ROUTING_FILE"/*/config/routing.json; do
+    if [[ -f "$_rf" ]]; then
+      # Extract first channel ID for this agent from routing.json
+      CHANNEL_ID=$(python3 -c "
+import json, sys
+with open('$_rf') as f:
+    r = json.load(f)
+agent = r.get('agents', {}).get('${AGENT_NAME}', {})
+channels = agent.get('channels', [])
+print(channels[0] if channels else '')
+" 2>/dev/null || true)
+      break
+    fi
+  done
+fi
+
 if [[ -z "$CHANNEL_ID" ]]; then
-  echo "reply_discord: no channel ID. Set CLAUDECORD_CHANNEL_ID or pass --channel." >&2
+  echo "reply_discord: no channel ID. Set CLAUDECORD_CHANNEL_ID, pass --channel, or ensure AGENT_NAME is set." >&2
   exit 1
 fi
 
@@ -101,7 +120,7 @@ RESPONSE=$(curl -s -w "\n%{http_code}" \
 }
 
 HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 
 if [[ "$HTTP_CODE" != "200" ]]; then
   echo "reply_discord: server error ${HTTP_CODE}: ${BODY}" >&2

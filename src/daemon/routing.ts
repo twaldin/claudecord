@@ -5,7 +5,7 @@ export function resolveAgent(config: RoutingConfig, channelId: string): string |
   for (const [name, routing] of Object.entries(config.agents)) {
     if (routing.channels.includes(channelId)) return name
   }
-  return config.defaultAgent ?? null
+  return null
 }
 
 export function loadRouting(path: string): RoutingConfig {

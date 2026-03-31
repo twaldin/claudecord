@@ -178,13 +178,16 @@ function findSendMessage(): string {
     if (existsSync(p)) return p
   }
 
-  // 2. ~/.claude/plugins/cache/tmux-orchestrator/*/scripts/send_message
+  // 2. ~/.claude/plugins/cache/tmux-orchestrator/*/*/scripts/send_message
   const cacheBase = join(homedir(), '.claude', 'plugins', 'cache', 'tmux-orchestrator')
   if (existsSync(cacheBase)) {
     try {
-      for (const entry of readdirSync(cacheBase)) {
-        const candidate = join(cacheBase, entry, 'scripts', 'send_message')
-        if (existsSync(candidate)) return candidate
+      for (const plugin of readdirSync(cacheBase)) {
+        const pluginDir = join(cacheBase, plugin)
+        for (const version of readdirSync(pluginDir)) {
+          const candidate = join(pluginDir, version, 'scripts', 'send_message')
+          if (existsSync(candidate)) return candidate
+        }
       }
     } catch {}
   }
@@ -197,8 +200,9 @@ const SEND_MESSAGE_PATH = findSendMessage()
 
 function sendToAgent(agentName: string, msg: Message): void {
   const text = msg.content || '(attachment)'
-  const envelope = `[DISCORD:${msg.author.username}]: ${text}`
-  execFile(SEND_MESSAGE_PATH, [agentName, envelope], (err) => {
+  execFile(SEND_MESSAGE_PATH, [agentName, text], {
+    env: { ...process.env, AGENT_NAME: msg.author.username },
+  }, (err) => {
     if (err) {
       process.stderr.write(`claudecord: send_message to ${agentName} failed: ${err.message}\n`)
     }
@@ -369,6 +373,9 @@ mcp.setRequestHandler(CallToolRequestSchema, async req => {
           lastHeartbeatAt: null,
         })
 
+        // Persist to routing.json so mapping survives MCP server restarts
+        addAgentChannel(routing, agentName, channel.id, { type: agentType, task }, ROUTING_PATH)
+
         return { content: [{ type: 'text', text: `created channel ${channel.id} (#${agentName})` }] }
       }
 
@@ -391,12 +398,13 @@ mcp.setRequestHandler(CallToolRequestSchema, async req => {
         await msg.react('📦')
         await msg.react('🗑️')
 
-        // Mark dead in registry
+        // Mark dead in registry and remove from routing.json
         const entry = agentRegistry.get(agentName)
         if (entry) {
           entry.status = 'dead'
           entry.diedAt = new Date().toISOString()
         }
+        removeAgentChannel(routing, agentName, ROUTING_PATH)
 
         return { content: [{ type: 'text', text: `archived channel ${channelId}` }] }
       }
@@ -468,29 +476,10 @@ client.on('messageCreate', (msg: Message) => {
   const channelId = msg.channelId
   const agentName = resolveAgentForChannel(channelId)
 
-  // If no routing → deliver to primary agent (the orchestrator running this server)
+  // Route to the target agent (or primary/orchestrator if no specific routing)
   const target = agentName ?? PRIMARY
 
-  // Orchestrator's channel: deliver as MCP notification
-  if (isPrimaryChannel(channelId) || target === PRIMARY) {
-    void mcp.notification({
-      method: 'notifications/claude/channel',
-      params: {
-        content: msg.content || (msg.attachments.size > 0 ? '(attachment)' : ''),
-        meta: {
-          chat_id: channelId,
-          message_id: msg.id,
-          user: msg.author.username,
-          user_id: msg.author.id,
-          ts: msg.createdAt.toISOString(),
-          ...(msg.attachments.size > 0 ? { attachment_count: String(msg.attachments.size) } : {}),
-        },
-      },
-    }).catch(e => process.stderr.write(`claudecord: MCP notification failed: ${e}\n`))
-    return
-  }
-
-  // Other agents: route via tmux
+  // All agents (including orchestrator) receive messages via tmux send_message
   process.stderr.write(`claudecord: routing message to ${target} (channel ${channelId})\n`)
   sendToAgent(target, msg)
 })
