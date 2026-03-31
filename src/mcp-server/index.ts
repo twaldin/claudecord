@@ -628,10 +628,17 @@ async function resolvePrompt(
   promptByMessageId.delete(pending.messageId)
   resolvedHashes.set(pending.paneHash, Date.now())
 
-  const key = decision === 'allow' ? 'y' : 'n'
-  execFile('tmux', ['send-keys', '-t', `${TMUX_SESSION}:${agentName}`, key, 'Enter'], err => {
-    if (err) process.stderr.write(`claudecord: tmux send-keys failed for ${agentName}: ${err.message}\n`)
-  })
+  // TUI menu: Enter = accept highlighted "Yes", Down Down Enter = select "No"
+  const target = `${TMUX_SESSION}:${agentName}`
+  if (decision === 'allow') {
+    execFile('tmux', ['send-keys', '-t', target, 'Enter'], err => {
+      if (err) process.stderr.write(`claudecord: tmux send-keys failed for ${agentName}: ${err.message}\n`)
+    })
+  } else {
+    execFile('tmux', ['send-keys', '-t', target, 'Down', 'Down', 'Enter'], err => {
+      if (err) process.stderr.write(`claudecord: tmux send-keys failed for ${agentName}: ${err.message}\n`)
+    })
+  }
 
   try {
     const ch = await fetchTextChannel(pending.channelId)
@@ -653,7 +660,7 @@ async function handleTimeout(agentName: string, pending: PendingPrompt): Promise
   promptByMessageId.delete(pending.messageId)
   resolvedHashes.set(pending.paneHash, Date.now())
 
-  execFile('tmux', ['send-keys', '-t', `${TMUX_SESSION}:${agentName}`, 'n', 'Enter'])
+  execFile('tmux', ['send-keys', '-t', `${TMUX_SESSION}:${agentName}`, 'Down', 'Down', 'Enter'])
 
   try {
     const ch = await fetchTextChannel(pending.channelId)
