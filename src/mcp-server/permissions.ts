@@ -39,19 +39,29 @@ export function paneHash(text: string): string {
 }
 
 export function extractPromptDetails(paneText: string): { tool: string; context: string } {
+  // TUI dialog: "Tool: Bash" line
   const toolMatch = paneText.match(/Tool:\s*(.+)/i)
+  // Inline format: "⏺ Bash(cmd)" or "● Write(/path)"
   const inlineMatch = paneText.match(/[⏺●]\s*(Write|Bash|Edit|Read|Glob|Grep)\(([^)]*)\)/i)
+  // TUI label on its own line: " Bash command" or " Create file"
+  const tuiLabelMatch = paneText.match(/^\s*(Bash|Write|Edit|Read)\s+command\s*$/im)
+    ?? paneText.match(/^\s*Create\s+file\s*$/im)
   const cmdMatch = paneText.match(/Command:\s*(.+)/i)
   const pathMatch = paneText.match(/Do you want to (?:create|allow|proceed with)\s+(.+?)(?:\?|$)/im)
   const mcpMatch = paneText.match(/Server:\s*(.+)/i)
   const createMatch = paneText.match(/Create file\s*\n\s*(.+)/im)
+  // TUI body: indented command/path after the label
+  const tuiBodyMatch = paneText.match(/(?:Bash|Write|Edit|Read) command\s*\n\s*\n\s{3,}(.+)/im)
+    ?? paneText.match(/Create file\s*\n\s*(?:\.\.\/)*(.+)/im)
 
   const tool = toolMatch?.[1]?.trim()
     ?? inlineMatch?.[1]?.trim()
+    ?? (tuiLabelMatch ? tuiLabelMatch[1]?.trim() ?? 'Write' : null)
     ?? mcpMatch?.[1]?.trim()
     ?? 'unknown'
   const context = cmdMatch?.[1]?.trim()
     ?? inlineMatch?.[2]?.trim()
+    ?? tuiBodyMatch?.[1]?.trim()
     ?? createMatch?.[1]?.trim()
     ?? pathMatch?.[1]?.trim()
     ?? paneText.slice(-300).replace(/\x1b\[[0-9;]*m/g, '').trim()
